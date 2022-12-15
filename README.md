@@ -1,2 +1,2 @@
-# Joystick_tv__Bot
- Chatbot for Joystick.TV
+# Shimamura Bot
+ Chatbot for Joystick.TV for Adachi91
