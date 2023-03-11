@@ -137,7 +137,6 @@ namespace Joystick_tv__Bot
 
         private Uri _uri { get; set; }
         private string _header { get; set; }
-        private bool _joystick { get; set; }
         public bool _connected { get; private set; }
         public events _events;
         private ClientWebSocket _webSocket;
@@ -148,29 +147,35 @@ namespace Joystick_tv__Bot
         /// </summary>
         /// <param name="uri">The WSS endpoint</param>
         /// <param name="header">Custom Headers</param>
-        /// <param name="user_id">Bot Username</param>
-        /// <param name="user_uuid">Bot UUID</param>
-        /// <param name="user_token">Bot Token</param>
+        /// <param name="bot_id">Bot Username</param>
+        /// <param name="bot_uuid">Bot UUID</param>
+        /// <param name="bot_token">Bot Token</param>
         /// <param name="stream_id">Stream usernname</param>
-        /// <param name="joystick"></param>
-        public client(Uri uri, string header, string bot_id, string bot_uuid, string bot_token, string stream_id="", bool joystick=false)
+        public client(Uri uri, string header, string bot_id, string bot_uuid, string bot_token, string stream_id="")
         {
             _webSocket = new ClientWebSocket();
-            //_webSocket.Options.AddSubProtocol("wss");
+            _webSocket.Options.AddSubProtocol("wss");
             _webSocket.Options.AddSubProtocol("actioncable-v1-json");
+            _webSocket.Options.AddSubProtocol("actioncable-unsupported");
+
             _webSocket.Options.SetRequestHeader("Cookie", token.Cookie);
+            _webSocket.Options.SetRequestHeader("Origin", "https://joystick.tv");
+            //_webSocket.Options.SetRequestHeader("Sec-WebSocket-Key", token.SecKey);
+            //_webSocket.Options.SetRequestHeader("Sec-WebSocket-Version", "13");
+            //_webSocket.Options.SetRequestHeader("Upgrade", "websocket");
+            //_webSocket.Options.SetRequestHeader("", "");
+            //_webSocket.Options.SetRequestHeader("", "");
+            //_webSocket.Options.SetRequestHeader("", "");
+
             _uri = uri;
             _header = header;
-            _joystick = joystick;
             _events = new events(bot_id, bot_uuid, bot_token, stream_id);
         }
 
-        public async Task Connect()
+        public async Task Connect(CancellationToken cancellationToken = default)
         {
-            //if(_joystick)
-                //_webSocket.Options.SetRequestHeader("Sec-WebSocket-Protocol", _header); //actioncable-v1-json
             try {
-                await _webSocket.ConnectAsync(_uri, CancellationToken.None);
+                await _webSocket.ConnectAsync(_uri, cancellationToken);
                 _connected = true;
             } catch (Exception ex) {
                 Console.WriteLine("Connection Error: {0}", ex);
@@ -183,8 +188,11 @@ namespace Joystick_tv__Bot
             _connected = false;
         }
 
-        public async Task Subscribe(string _event, bool debug = false)
+        public async Task Subscribe(string _event, bool debug = false, CancellationToken cancellationToken = default)
         {
+            if (!_connected)
+                throw new InvalidOperationException("Not connected to WebSocket endpoint.");
+
             if (debug)
             {
                 //var test4 = "{\"command\":\"subscribe\",\"identifier\":\"{ \"channel\":\"ApplicationChannel\"}\"}";
@@ -205,21 +213,20 @@ namespace Joystick_tv__Bot
                     try {
                         await _webSocket.SendAsync(buffer, WebSocketMessageType.Text, true, CancellationToken.None);
                     } catch (Exception ex) { Console.WriteLine(ex); }
-                    Thread.Sleep(150);
+                    //Thread.Sleep(150);
                 }
                 return;
             }
 
-            List<Object> msg;
-            msg = _events.MessageConstructor(_event);
+            List<Object> msg = _events.MessageConstructor(_event);
 
             foreach(var messy in msg)
             {
                 var json = JsonSerializer.Serialize(messy);
-                Console.WriteLine("[Socket]: Dryrun - {0}", json);
+                Console.WriteLine("[Client]: {0}", json);
                 var buffer = new ArraySegment<byte>(Encoding.UTF8.GetBytes(json));
                 try {
-                    await _webSocket.SendAsync(buffer, WebSocketMessageType.Text, true, CancellationToken.None);
+                    await _webSocket.SendAsync(buffer, WebSocketMessageType.Text, true, cancellationToken);
                 } catch (Exception ex) {
                     Console.WriteLine("Shit exploded in the Subscribe Method - {0}", ex);
                 }
@@ -234,19 +241,29 @@ namespace Joystick_tv__Bot
             await _webSocket.SendAsync(buffer, WebSocketMessageType.Text, true, CancellationToken.None);
         }
 
-        public async Task Listen()
+        public async Task Listen(CancellationToken cancellationToken = default)
         {
-            var buffer = new byte[1024 * 4];
-            while (_webSocket.State == WebSocketState.Open)
-            {
-                var result = await _webSocket.ReceiveAsync(new ArraySegment<byte>(buffer), CancellationToken.None);
-                var message = Encoding.UTF8.GetString(buffer, 0, result.Count);
-                Console.WriteLine("[Socket]: {0}", message);
-                //if (message.Contains("{\"type\":\"welcome\"}"))
-                    //Task.Delay(750).ContinueWith(_ => Subscribe("connect", true));
-                    //Task.Run(()=> Subscribe("connect", true));
+            if (!_connected)
+                throw new InvalidOperationException("Not connected to WebSocket endpoint.");
 
+            var buffer = new byte[1024];
+            while (_webSocket.State == WebSocketState.Open && !cancellationToken.IsCancellationRequested)
+            {
+                var result = await _webSocket.ReceiveAsync(new ArraySegment<byte>(buffer), cancellationToken);
+                if (result.MessageType == WebSocketMessageType.Text)
+                {
+                    var message = Encoding.UTF8.GetString(buffer, 0, result.Count);
+                    Console.WriteLine("[Socket]: {0}", message);
+                    if (message.Contains("{\"type\":\"welcome\"}"))
+                    {
+                        Task.Run(() => Subscribe("connect", false, cancellationToken));
+                        Task.Run(() => Subscribe("subscribe", false, cancellationToken));
+                    }
+                } else {
+                    Console.WriteLine("Invalid WebSocketMessageType: {0}", result.MessageType.ToString());
+                }
             }
+
             if (_webSocket.State != WebSocketState.Open)
                 Console.WriteLine("[Socket]: The connection was forcefully closed. [{0}]", _webSocket.State.ToString());
             _connected = false;

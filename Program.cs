@@ -5,8 +5,6 @@ using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
 using Newtonsoft.Json;
-//using Serilog;
-//using Serilog.Events;
 
 
 namespace Joystick_tv__Bot
@@ -28,11 +26,10 @@ namespace Joystick_tv__Bot
         private const string subscription_channel = "{\"command\":\"subscribe\",\"identifier\":\"{\\\"channel\\\":\\\"SystemEventChannel\\\",\\\"user_id\\\":\\\"adachi91\\\"}\"}";
 
         //private static client wssClient = new client(Joystick, "actioncable-v1-json", true);
-        private static client wssClient = new client(Joystick, "", "shimamura", BotUUID, apolloSecret);
+        private static client wssClient = new client(Joystick, "", "shimamura", BotUUID, apolloSecret, "adachi91");
 
         static void Main(string[] args)
         {
-
             AppDomain.CurrentDomain.ProcessExit += CurrentDomainOnProcessExit;
             Console.CancelKeyPress += ConsoleOnCancelKeyPress;
 

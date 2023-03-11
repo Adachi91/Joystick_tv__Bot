@@ -47,10 +47,10 @@ namespace Joystick_tv__Bot
             switch (command)
             {
                 case "connect":
-                    //msg.Add(new { command = "subscribe", identifier = new { channel = "ApplicationChannel" } });
-                    msg.Add(new { command = "subscribe", identifier = test });
-                    //msg.Add(new { command = "subscribe", identifier = new { channel = "SystemEventChannel", user_id = _user_id } });
-                    msg.Add(new { command = "subscribe", identifier = test2 });
+                    msg.Add(new { command = "subscribe", identifier = new { channel = "ApplicationChannel" } });
+                    //msg.Add(new { command = "subscribe", identifier = test });
+                    msg.Add(new { command = "subscribe", identifier = new { channel = "SystemEventChannel", user_id = _user_id } });
+                    //msg.Add(new { command = "subscribe", identifier = test2 });
                     break;
                 case "subscribe":
                     msg.Add(new { command = "subscribe", identifier = new { channel = "EventLogChannel", stream_id = _stream_id } });
