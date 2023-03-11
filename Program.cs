@@ -27,7 +27,8 @@ namespace Joystick_tv__Bot
         private const string subscription_type = "{\"command\":\"subscribe\",\"identifier\":\"{\\\"channel\\\":\\\"ApplicationChannel\\\"}\"}";
         private const string subscription_channel = "{\"command\":\"subscribe\",\"identifier\":\"{\\\"channel\\\":\\\"SystemEventChannel\\\",\\\"user_id\\\":\\\"adachi91\\\"}\"}";
 
-        private static client wssClient = new client(Joystick, "actioncable-v1-json", true);
+        //private static client wssClient = new client(Joystick, "actioncable-v1-json", true);
+        private static client wssClient = new client(Joystick, "", "shimamura", BotUUID, apolloSecret);
 
         static void Main(string[] args)
         {
@@ -53,12 +54,23 @@ namespace Joystick_tv__Bot
                 var input = Console.ReadLine();
                 if (input.ToLower() == "exit")
                 {
+                    wssClient._events.MessageConstructor("disconnect");
                     socket.Disconnect().Wait();
                     break;
                 }
                 else
                 {
                     //socket.SendMessage(input).Wait();
+                }
+                switch(input.ToLower())
+                {
+                    case "exit":
+                        wssClient._events.MessageConstructor("disconnect");
+                        socket.Disconnect().Wait();
+                        break;
+                    case "sendit":
+                        Task.Run(() => wssClient.Subscribe("connect", true));
+                        break;
                 }
             }
             
@@ -71,7 +83,7 @@ namespace Joystick_tv__Bot
         {
             await wssClient.Connect();
             Console.WriteLine("Main Thread: Connection: {0}", wssClient._connected);
-            await wssClient.Subscribe(1);
+            //await wssClient.Subscribe("connect");
             Task.Run(() => wssClient.Listen());
             return wssClient;
         }

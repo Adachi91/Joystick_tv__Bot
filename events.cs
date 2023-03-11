@@ -34,15 +34,23 @@ namespace Joystick_tv__Bot
         /// <param name="command">Command type (connect, subscribe, unsubscribe, sendmessage, disconnect)</param>
         /// <param name="message">Only required for message type sendmessage</param>
         /// <returns></returns>
-        public Object MessageConstructor(string command, string message = "")
+        public List<Object> MessageConstructor(string command, string message = "")
         {
             List<Object> msg = new List<object>();
+
+            var test = ":\"{ \"channel\":\"ApplicationChannel\"}";
+            var test2 = "\"{\"channel\":\"SystemEventChannel\",\"user_id\":\"" + _user_id + "\"}";
+
+            var test4 = "{\"command\":\"subscribe\",\"identifier\":\"{ \"channel\":\"ApplicationChannel\"}\"}";
+            var test6 = "{\"command\":\"subscribe\",\"identifier\":\"{\"channel\":\"SystemEventChannel\",\"user_id\":\"shimamura\"}\"}";
 
             switch (command)
             {
                 case "connect":
-                    msg.Add(new { command = "subscribe", identifier = new { channel = "ApplicationChannel" } });
-                    msg.Add(new { command = "subscribe", identifier = new { channel = "SystemEventChannel", user_id = _user_id } });
+                    //msg.Add(new { command = "subscribe", identifier = new { channel = "ApplicationChannel" } });
+                    msg.Add(new { command = "subscribe", identifier = test });
+                    //msg.Add(new { command = "subscribe", identifier = new { channel = "SystemEventChannel", user_id = _user_id } });
+                    msg.Add(new { command = "subscribe", identifier = test2 });
                     break;
                 case "subscribe":
                     msg.Add(new { command = "subscribe", identifier = new { channel = "EventLogChannel", stream_id = _stream_id } });
@@ -72,16 +80,17 @@ namespace Joystick_tv__Bot
         /// <summary>
         /// Constructs Channel Subscription/Unsubscription/Messaging
         /// </summary>
+        /// <param name="bot_id">Bot name UNLESS ChatChannel is subscription then UUID is required</param>
+        /// <param name="bot_uuid">Bot UUID</param>
+        /// <param name="bot_token">The bots Token required for sending a message.</param>
         /// <param name="stream_id">The target stream</param>
-        /// <param name="user_id">Bot name UNLESS ChatChannel is subscription then UUID is required</param>
-        /// <param name="user_UUID">Bot UUID</param>
-        /// <param name="user_Token">The bots Token required for sending a message.</param>
-        public events(string stream_id, string user_id, string user_UUID, string user_Token)
+        public events(string bot_id, string bot_uuid, string bot_token, string stream_id = "")
         {
-            _stream_id = stream_id;
-            _user_id = user_id;
-            _user_uuid = user_UUID;
-            _userToken = user_Token;
+            _user_id = bot_id;
+            _user_uuid = bot_uuid;
+            _userToken = bot_token;
+            if(!string.IsNullOrEmpty(stream_id))
+                _stream_id = stream_id;
         }
 
         public void Dispose() {
