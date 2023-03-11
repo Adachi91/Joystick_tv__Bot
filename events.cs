@@ -15,27 +15,10 @@ namespace Joystick_tv__Bot
         private string _user_id;
         private string _user_uuid;
         private string _stream_id;
+        private string _userToken;
         public bool streamSuccess;
         public bool appSuccess;
 
-        public class subscription
-        {
-            public string command { get; set; }
-            public identifier identifier { get; set; }
-        }
-
-        public class unsubscribe
-        {
-            public string command { get; set; }
-            public identifier identifier { get; set; }
-        }
-
-        public class identifier
-        {
-            public string channel { get; set; }
-            public string user_id { get; set; }
-            public string stream_id { get; set; }
-        }
 
         enum Channels {
             ApplicationChannel, //only required on first connection or reconnection
@@ -45,90 +28,76 @@ namespace Joystick_tv__Bot
             WhisperChatChannel//Channel_Specific
         };
 
-        public Object MessageConstructor()
+        /// <summary>
+        /// Construct a Message to send to the Socket.
+        /// </summary>
+        /// <param name="command">Command type (connect, subscribe, unsubscribe, sendmessage, disconnect)</param>
+        /// <param name="message">Only required for message type sendmessage</param>
+        /// <returns></returns>
+        public Object MessageConstructor(string command, string message = "")
         {
+            List<Object> msg = new List<object>();
 
+            switch (command)
+            {
+                case "connect":
+                    msg.Add(new { command = "subscribe", identifier = new { channel = "ApplicationChannel" } });
+                    msg.Add(new { command = "subscribe", identifier = new { channel = "SystemEventChannel", user_id = _user_id } });
+                    break;
+                case "subscribe":
+                    msg.Add(new { command = "subscribe", identifier = new { channel = "EventLogChannel", stream_id = _stream_id } });
+                    msg.Add(new { command = "subscribe", identifier = new { channel = "ChatChannel", stream_id = _stream_id, user_id = _user_uuid } });
+                    msg.Add(new { command = "subscribe", identifier = new { channel = "WhisperChatChannel", user_id = _user_id, stream_id = _stream_id } });
+                    break;
+                case "unsubscribe":
+                    msg.Add(new { command = "unsubscribe", identifier = new { channel = "EventLogChannel", stream_id = _stream_id } });
+                    msg.Add(new { command = "unsubscribe", identifier = new { channel = "ChatChannel", stream_id = _stream_id, user_id = _user_uuid } });
+                    msg.Add(new { command = "unsubscribe", identifier = new { channel = "WhisperChatChannel", user_id = _user_id, stream_id = _stream_id } });
+                    break;
+                case "sendmessage": //Please make sure this is utf88888888888888888888888888888888888888888888888888888888888 thanks. I like Unicode though, I heard it's best for the web,
+                    msg.Add(new { command = "message", identifier = new { channel = "ChatChannel", stream_id = _stream_id, user_id = _user_uuid  }, data = new { text =  message, token = _userToken, action = "send_message" } });
+                    break;
+                case "disconnect": //Call unsunscribe first  ? pls thx luv u ♥
+                    msg.Add(new { command = "unsubscribe", identifier = new { channel = "ApplicationChannel" } });
+                    msg.Add(new { command = "unsubscribe", identifier = new { channel = "SystemEventChannel", user_id = _user_id } });
+                    break;
+                default:
+                    throw new Exception("An invalid call to MessageConstructor was passed.");
+                    break;
+            }
+
+            return msg;
         }
 
         /// <summary>
-        /// Constructs Subscription and Unsubscribing events for a channel.
+        /// Constructs Channel Subscription/Unsubscription/Messaging
         /// </summary>
-        /// <param name="command">Type of channel to construct</param>
         /// <param name="stream_id">The target stream</param>
         /// <param name="user_id">Bot name UNLESS ChatChannel is subscription then UUID is required</param>
         /// <param name="user_UUID">Bot UUID</param>
-        public events(string command, string stream_id, string user_id, string user_UUID)
+        /// <param name="user_Token">The bots Token required for sending a message.</param>
+        public events(string stream_id, string user_id, string user_UUID, string user_Token)
         {
-            switch (command) {
-                case "connect":
-                    List<Object> Connection = new List<object>
-                    {
-                        new { command = "Subscribe", identifier = new { channel = "ApplicationChannel" } },
-                        new { command = "Subscribe", identifier = new { channel = "SystemEventChannel", user_id = user_id } },
-                    };
-
-                    //return Connection;
-                    break;
-                case "subscribe":
-                    //var sub = new subscription();
-                    List<subscription> subbing = new List<subscription>();
-                    List<Object> Subscription = new List<object> {
-                        new { command = "Subscribe", identifier = new { channel = "EventLogChannel", stream_id = stream_id } },
-                        new { command = "Subscribe", identifier = new { channel = "ChatChannel", stream_id = stream_id, user_id = user_UUID } },
-                        new { command = "Subscribe", identifier = new { channel = "WhisperChatChannel", user_id = user_id, stream_id = stream_id } },
-                    };
-                    //sub.identifier.channel = ;
-                    //sub.identifier.stream_id = "";
-                    foreach(string channel in Enum.GetValues(typeof(Channels)))
-                    {
-                        switch(channel)
-                        {
-                            case "ApplicationChannel": //only requires sending type.
-                                subscription ApplicationChannel = new subscription();
-                                ApplicationChannel.command = "subscribe";
-                                ApplicationChannel.identifier.channel = channel;
-                                subbing.Add(ApplicationChannel);
-                                break;
-                            case "SystemEventChannel":
-                                subscription SystemEventChannel = new subscription();
-                                SystemEventChannel.command = "subscribe";
-                                SystemEventChannel.identifier.user_id = user_id;
-                                SystemEventChannel.identifier.channel = channel;
-                                subbing.Add(SystemEventChannel);
-                                break;
-                            case "EventLogChannel":
-                                break;
-                            case "ChatChannel": //requires UUID
-                                break;
-                            case "WhisperChatChannel":
-                                break;
-                        }
-                    }
-                    break;
-                case "unsubscribe":
-                    var unsub = new unsubscribe();
-                    break;
-                default:
-                    break;
-        }
+            _stream_id = stream_id;
+            _user_id = user_id;
+            _user_uuid = user_UUID;
+            _userToken = user_Token;
         }
 
-        public void Dispose()
-        {
+        public void Dispose() {
             Dispose(true);
             GC.SuppressFinalize(this);
         }
 
-        protected virtual void Dispose(bool disposing)
-        {
-            if (!_disposed)
-            {
-                if (disposing)
-                {
-                    // Release any managed resources here
+        protected virtual void Dispose(bool disposing) {
+            if (!_disposed) {
+                if (disposing) {
+                    _stream_id = null;
+                    _user_id = null;
+                    _user_uuid = null;
+                    _userToken = null;
                 }
 
-                // Release any unmanaged resources here
                 _disposed = true;
             }
         }
