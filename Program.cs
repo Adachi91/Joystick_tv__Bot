@@ -26,7 +26,7 @@ namespace Joystick_tv__Bot
         private const string subscription_channel = "{\"command\":\"subscribe\",\"identifier\":\"{\\\"channel\\\":\\\"SystemEventChannel\\\",\\\"user_id\\\":\\\"adachi91\\\"}\"}";
 
         //private static client wssClient = new client(Joystick, "actioncable-v1-json", true);
-        private static client wssClient = new client(Joystick, "", "shimamura", BotUUID, apolloSecret, "adachi91");
+        private static client wssClient = new client(Joystick, "shimamura", BotUUID, apolloSecret, "adachi91");
 
         static void Main(string[] args)
         {
@@ -49,20 +49,11 @@ namespace Joystick_tv__Bot
             while(socket._connected)
             {
                 var input = Console.ReadLine();
-                if (input.ToLower() == "exit")
-                {
-                    wssClient._events.MessageConstructor("disconnect");
-                    socket.Disconnect().Wait();
-                    break;
-                }
-                else
-                {
-                    //socket.SendMessage(input).Wait();
-                }
                 switch(input.ToLower())
                 {
                     case "exit":
-                        wssClient._events.MessageConstructor("disconnect");
+                        Task.Run(() => wssClient.Unsubscribe("disconnect", false)).Wait();
+                        Console.WriteLine("|_./");
                         socket.Disconnect().Wait();
                         break;
                     case "sendit":

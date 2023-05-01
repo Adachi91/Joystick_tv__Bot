@@ -9,15 +9,21 @@ namespace Joystick_tv__Bot
     //Thanks to veccasalt for entertaining me while I wrote up this monsterousity of a class, also grabbed the WSS event types while viewing.
     class events : IDisposable
     {
-
+        /*
+         *              Pretty much the "Stateful" class of the program
+         *  THIS WHOLE FUCKING CLASS FILE IS A MESS AND YOU SHOULD FEEL BAD
+         *  also please clean up and refactor the code and add a, you know what nevermind I'll do it now.
+         */
         private bool _disposed = false;
 
         private string _user_id;
         private string _user_uuid;
         private string _stream_id;
         private string _userToken;
-        public bool streamSuccess;
-        public bool appSuccess;
+        public bool streamSuccess; //this was the same as below but for a stream_id?
+        public bool appSuccess; //this was a subscribe state - depcrate
+        public bool isSubscribed;
+        public Dictionary<string, bool> Subscriptions;
 
 
         enum Channels {
@@ -37,6 +43,7 @@ namespace Joystick_tv__Bot
         public List<Object> MessageConstructor(string command, string message = "")
         {
             List<Object> msg = new List<object>();
+            //List<string> msg = new List<string>();
 
             var test = ":\"{ \"channel\":\"ApplicationChannel\"}";
             var test2 = "\"{\"channel\":\"SystemEventChannel\",\"user_id\":\"" + _user_id + "\"}";
@@ -47,10 +54,8 @@ namespace Joystick_tv__Bot
             switch (command) //flips out if it doesn't have the escape slashes unescaped on send.
             {
                 case "connect":
-                    msg.Add(new { command = "subscribe", identifier = new { channel = "ApplicationChannel" } });
-                    //msg.Add(new { command = "subscribe", identifier = test });
-                    msg.Add(new { command = "subscribe", identifier = new { channel = "SystemEventChannel", user_id = _user_id } });
-                    //msg.Add(new { command = "subscribe", identifier = test2 });
+                    msg.Add(new { command = "subscribe", identifier = "{\"channel\":\"ApplicationChannel\"}" });
+                    msg.Add(new { command = "subscribe", identifier = "{\"channel\":\"SystemEventChannel\",\"user_id\":\"" + _user_id + "\"}" });
                     break;
                 case "subscribe":
                     msg.Add(new { command = "subscribe", identifier = new { channel = "EventLogChannel", stream_id = _stream_id } });
@@ -66,8 +71,8 @@ namespace Joystick_tv__Bot
                     msg.Add(new { command = "message", identifier = new { channel = "ChatChannel", stream_id = _stream_id, user_id = _user_uuid  }, data = new { text =  message, token = _userToken, action = "send_message" } });
                     break;
                 case "disconnect": //Call unsunscribe first  ? pls thx luv u ♥
-                    msg.Add(new { command = "unsubscribe", identifier = new { channel = "ApplicationChannel" } });
-                    msg.Add(new { command = "unsubscribe", identifier = new { channel = "SystemEventChannel", user_id = _user_id } });
+                    msg.Add(new { command = "unsubscribe", identifier = "{\"channel\":\"ApplicationChannel\"}" });
+                    msg.Add(new { command = "unsubscribe", identifier = "{\"channel\":\"SystemEventChannel\",\"user_id\":\"" + _user_id + "\"}" });
                     break;
                 default:
                     throw new Exception("An invalid call to MessageConstructor was passed.");
@@ -89,6 +94,7 @@ namespace Joystick_tv__Bot
             _user_id = bot_id;
             _user_uuid = bot_uuid;
             _userToken = bot_token;
+            Subscriptions = new Dictionary<string, bool>();
             if(!string.IsNullOrEmpty(stream_id))
                 _stream_id = stream_id;
         }

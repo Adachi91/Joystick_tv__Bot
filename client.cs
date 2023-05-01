@@ -137,39 +137,32 @@ namespace Joystick_tv__Bot
          */
 
         private Uri _uri { get; set; }
-        private string _header { get; set; }
         public bool _connected { get; private set; }
+        public bool isExiting { get; set; }
+        /// <summary>
+        /// Creates an instance of the events class to construct messages, supplying the bot id, uuid, and currently stream_id (ew)
+        /// </summary>
         public events _events;
         private ClientWebSocket _webSocket;
+        private bool debugging = true;
 
 
         /// <summary>
         /// Constructs the WebSocket client and Events.MessageConstructor
         /// </summary>
         /// <param name="uri">The WSS endpoint</param>
-        /// <param name="header">Custom Headers</param>
         /// <param name="bot_id">Bot Username</param>
         /// <param name="bot_uuid">Bot UUID</param>
         /// <param name="bot_token">Bot Token</param>
         /// <param name="stream_id">Stream usernname</param>
-        public client(Uri uri, string header, string bot_id, string bot_uuid, string bot_token, string stream_id="")
+        public client(Uri uri, string bot_id, string bot_uuid, string bot_token, string stream_id="")
         {
             _webSocket = new ClientWebSocket();
             _webSocket.Options.AddSubProtocol("wss");
             _webSocket.Options.AddSubProtocol("actioncable-v1-json");
             _webSocket.Options.AddSubProtocol("actioncable-unsupported");
 
-            _webSocket.Options.SetRequestHeader("Cookie", token.Cookie);
-            _webSocket.Options.SetRequestHeader("Origin", "https://joystick.tv");
-            //_webSocket.Options.SetRequestHeader("Sec-WebSocket-Key", token.SecKey);
-            //_webSocket.Options.SetRequestHeader("Sec-WebSocket-Version", "13");
-            //_webSocket.Options.SetRequestHeader("Upgrade", "websocket");
-            //_webSocket.Options.SetRequestHeader("", "");
-            //_webSocket.Options.SetRequestHeader("", "");
-            //_webSocket.Options.SetRequestHeader("", "");
-
             _uri = uri;
-            _header = header;
             _events = new events(bot_id, bot_uuid, bot_token, stream_id);
         }
 
@@ -183,10 +176,18 @@ namespace Joystick_tv__Bot
             }
         }
 
+        /// <summary>
+        /// async task to dispatch CloseAsync on WSSClient
+        /// </summary>
+        /// <returns>nothing</returns>
         public async Task Disconnect()
         {
             await _webSocket.CloseAsync(WebSocketCloseStatus.NormalClosure, "", CancellationToken.None);
+            while(_webSocket.State != WebSocketState.Closed)
+                Thread.Sleep(100);
+
             _connected = false;
+            Console.WriteLine("[Socket]: Connection shutdown gracefully. Please come again.");
         }
 
 
@@ -253,18 +254,49 @@ namespace Joystick_tv__Bot
             //displayNameWithFlair {{{streamerBadge}}} ? stream_id == author.username - Is the stream Owner
         }
 
+        /// <summary>
+        /// Keys track of what channels the bot is subscribed to so it can ubsccruibe easier I think I just had   a stroke writing that.
+        /// </summary>
+        /// <param name="channel">Channel name</param>
+        public void AcknowledgeSubscription(string channel)
+        { //I want to keep this here so I can parse incoming sucessfull subscriptions and then command the list from here, instead of a fire and forget in events
+            if (_events.Subscriptions.ContainsKey(channel))
+                _events.Subscriptions[channel] = !_events.Subscriptions[channel];
+            else
+                _events.Subscriptions.Add(channel, true); //probably bad idea to hardcode true but fuck it with a bucket.
+        }
 
-        public async Task Subscribe(string _event, bool debug = false, CancellationToken cancellationToken = default)
+        private void MainParser(string resp)
+        { //Break down resp and send them to the correct subparser or build a gigantic pile of shit here.
+
+
+
+
+            if(resp.Contains(""))
+            {
+                //sub ack
+            } else if(resp.Contains(""))
+            {
+                //unsub ack
+            }
+        }
+
+        /// <summary>
+        /// Subscribe to a channel
+        /// </summary>
+        /// <param name="_event">Command</param>
+        /// <param name="debug">Temp for testing bypassing all code</param>
+        /// <param name="cancellationToken"></param>
+        /// <returns></returns>
+        public async Task Subscribe(string _event, bool debug = false, CancellationToken cancellationToken = default) //TODO YOU HAVE TO HADD AN EXTRA ARG besides Command you need to know WHO to subscribe to, jackass.
         {
             if (!_connected)
                 throw new InvalidOperationException("Not connected to WebSocket endpoint.");
 
+            //not sure how many events there are ehhhhhhhhh I think I got most of them ? probably not.
+
             if (debug)
             {
-                //var test4 = "{\"command\":\"subscribe\",\"identifier\":\"{ \"channel\":\"ApplicationChannel\"}\"}";
-                //var test6 = "{\"command\":\"subscribe\",\"identifier\":\"{\"channel\":\"SystemEventChannel\",\"user_id\":\"shimamura\"}\"}";
-                //string[] testy = { "{\"command\":\"subscribe\",\"identifier\":\"{ \"channel\":\"ApplicationChannel\"}\"}", "{\"command\":\"subscribe\",\"identifier\":\"{\"channel\":\"SystemEventChannel\",\"user_id\":\"shimamura\"}\"}" };
-                //string[] testy = { "{\"command\":\"subscribe\",\"identifier\":\"{ \"channel\":\"ApplicationChannel\"}\"}", "{\"command\":\"subscribe\",\"identifier\":\"{\"channel\":\"SystemEventChannel\",\"user_id\":\"shimamura\"}\"}" };
                 string[] testy = {
                     "{\"command\":\"subscribe\",\"identifier\":\"{\\\"channel\\\":\\\"ApplicationChannel\\\"}\"}",
                     "{\"command\":\"subscribe\",\"identifier\":\"{\\\"channel\\\":\\\"SystemEventChannel\\\",\\\"user_id\\\":\\\"" + token.username + "\\\"}\"}",
@@ -273,13 +305,6 @@ namespace Joystick_tv__Bot
                     "{\"command\":\"subscribe\",\"identifier\":\"{\\\"channel\\\":\\\"WhisperChatChannel\\\",\\\"user_id\\\":\\\"" + token.username + "\\\",\\\"stream_id\\\":\\\"adachi91\\\"}\"}",
                 };
 
-                //{"command":"subscribe","identifier":"{\"channel\":\"EventLogChannel\",\"stream_id\":\"adachi91\"}"}
-                //{"command":"subscribe","identifier":"{\"channel\":\"ChatChannel\",\"stream_id\":\"adachi91\",\"user_id\":\"b4fa89f7-7a7e-4a60-ba06-ac853f0b99f9\"}"}
-                //{"command":"subscribe","identifier":"{\"channel\":\"WhisperChatChannel\",\"user_id\":\"adachi91\",\"stream_id\":\"adachi91\"}"}
-
-
-                //string[] testy = { "{\"command\":\"subscribe\",\"identifier\":\"{\"channel\":\"ChatChannel\",\"stream_id\":\"adachi91\",\"user_id\":\"7b33f519-b785-42ee-b2e0-5b7007149f79\"}\" }", "{\"command\":\"subscribe\",\"identifier\":\"{ \"channel\":\"ApplicationChannel\"}\"}", "{\"command\":\"subscribe\",\"identifier\":\"{\"channel\":\"SystemEventChannel\",\"user_id\":\"shimamura\"}\"}" };
-                //string[] testy = { @"{""command"":""subscribe"",""identifier"":""{""channel"":""ApplicationChannel""}""}""", "{\"command\":\"subscribe\",\"identifier\":\"{\"channel\":\"SystemEventChannel\",\"user_id\":\"shimamura\"}\"}" };
                 ArraySegment<byte> buffer;
 
                 for(int i = 0; i<=4; i++)
@@ -298,15 +323,13 @@ namespace Joystick_tv__Bot
 
             List<Object> msg = _events.MessageConstructor(_event);
 
-            var options = new JsonSerializerOptions
-            {
-                Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping
-            };
+            var options = new JsonSerializerOptions { Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping };
 
             foreach (var messy in msg)
             {
                 var json = JsonSerializer.Serialize(messy, options);
-                Console.WriteLine("[Client]: {0}", json);
+                if(debugging)
+                    Console.WriteLine("[Client]: {0}", json);
                 var buffer = new ArraySegment<byte>(Encoding.UTF8.GetBytes(json));
                 try {
                     await _webSocket.SendAsync(buffer, WebSocketMessageType.Text, true, cancellationToken);
@@ -316,12 +339,33 @@ namespace Joystick_tv__Bot
             }
         }
 
-        public async Task Unsubscribe(string channel)
+        /// <summary>
+        /// Send Unsubscribe messages if leaving a channel, or disconnecting.
+        /// </summary>
+        /// <param name="_event">Event to send to the constructor for JSONifying</param>
+        /// <param name="debug">ASDFADSFADSFASDFASDF DELETE ME</param>
+        /// <param name="cancellationToken">Pizza</param>
+        /// <returns>nothing</returns>
+        public async Task Unsubscribe(string _event, bool debug = false, CancellationToken cancellationToken = default)
         {
-            var message = new { action = "unsubscribe", channel };
-            var json = JsonSerializer.Serialize(message);
-            var buffer = new ArraySegment<byte>(Encoding.UTF8.GetBytes(json));
-            await _webSocket.SendAsync(buffer, WebSocketMessageType.Text, true, CancellationToken.None);
+            var options = new JsonSerializerOptions { Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping };
+
+            List<Object> msg = _events.MessageConstructor(_event);
+
+            foreach (var THEGODDAMNMESSAGETOSENDONEATATIMEORSOMETHINGIDONTFUCKINGKNOWOK in msg)
+            {
+                var json = JsonSerializer.Serialize(THEGODDAMNMESSAGETOSENDONEATATIMEORSOMETHINGIDONTFUCKINGKNOWOK, options);
+                if (debugging)
+                    Console.WriteLine("[Client]: {0}", json);
+                var buffer = new ArraySegment<byte>(Encoding.UTF8.GetBytes(json));
+
+                try {
+                    await _webSocket.SendAsync(buffer, WebSocketMessageType.Text, true, CancellationToken.None);
+                } catch (Exception ex) {
+                    Console.WriteLine("Shit exploded in the Unsubscribe method, idk kill it or something :: {0}", ex);
+                }
+            }
+            Console.WriteLine("Jobs done, zug zug");
         }
 
         public async Task Listen(CancellationToken cancellationToken = default)
@@ -336,7 +380,9 @@ namespace Joystick_tv__Bot
                 if (result.MessageType == WebSocketMessageType.Text)
                 {
                     var message = Encoding.UTF8.GetString(buffer, 0, result.Count);
-                    Console.WriteLine("[Socket]: {0}", message);
+                    //if (!message.Contains("ping"))
+                        Console.WriteLine("[Socket]: {0}\r\n", message);
+
                     if (message.Contains("{\"type\":\"welcome\"}"))
                     {
                         //Task.Run(() => Subscribe("connect", false, cancellationToken));
