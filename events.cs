@@ -44,7 +44,7 @@ namespace Joystick_tv__Bot
             var test4 = "{\"command\":\"subscribe\",\"identifier\":\"{ \"channel\":\"ApplicationChannel\"}\"}";
             var test6 = "{\"command\":\"subscribe\",\"identifier\":\"{\"channel\":\"SystemEventChannel\",\"user_id\":\"shimamura\"}\"}";
 
-            switch (command)
+            switch (command) //flips out if it doesn't have the escape slashes unescaped on send.
             {
                 case "connect":
                     msg.Add(new { command = "subscribe", identifier = new { channel = "ApplicationChannel" } });

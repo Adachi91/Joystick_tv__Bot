@@ -5,8 +5,9 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Net.WebSockets;
-using System.Text.Json;
+using System.Text.Json; //
 using System.Collections.Generic;
+using System.Text.Encodings.Web;
 
 namespace Joystick_tv__Bot
 {
@@ -188,6 +189,71 @@ namespace Joystick_tv__Bot
             _connected = false;
         }
 
+
+        public async Task parseNewFollow()
+        {
+            /*
+             *[Socket]: {"identifier":"{\"channel\":\"ChatChannel\",\"stream_id\":\"adachi91\",\"user_id\":\"7b33f519-b785-42ee-b2e0-5b7007149f79\"}","message":{"event":"ChatMessage","createdAt":"2023-05-01T18:52:55Z","messageId":"2fae1949-9d6e-4f5b-a5ae-1e50f6c448fd","type":"new_message","visibility":"public","text":"thanks for the event","botCommand":null,"botCommandArg":null,"emotesUsed":[],"author":{"slug":"adachi91","username":"Adachi91","usernameColor":null,"displayNameWithFlair":"{{{streamerBadge}}} Adachi91","signedPhotoUrl":"https://images.joystick.tv/content/videos/joystick/production/6fe7/58b0/1937/7d7d/f77d/6fe758b019377d7df77de64802df5ca6/6fe758b019377d7df77de64802df5ca6.png?validfrom=1682966875&validto=1685559775&&hash=cpJ7pfkfeyRr2ZJL4u5GHpLl4bE%3D","signedPhotoThumbUrl":"https://images.joystick.tv/content/videos/joystick/production/6fe7/58b0/1937/7d7d/f77d/6fe758b019377d7df77de64802df5ca6/6fe758b019377d7df77de64802df5ca6-250x250.png?validfrom=1682966875&validto=1685559775&&hash=yqP1pHq2ssEmYFhj5QjA38ZFZy0%3D"},"strea
+[Socket]: mer":{"slug":"adachi91","username":"Adachi91","usernameColor":null,"signedPhotoUrl":"https://images.joystick.tv/content/videos/joystick/production/6fe7/58b0/1937/7d7d/f77d/6fe758b019377d7df77de64802df5ca6/6fe758b019377d7df77de64802df5ca6.png?validfrom=1682966875&validto=1685559775&&hash=cpJ7pfkfeyRr2ZJL4u5GHpLl4bE%3D","signedPhotoThumbUrl":"https://images.joystick.tv/content/videos/joystick/production/6fe7/58b0/1937/7d7d/f77d/6fe758b019377d7df77de64802df5ca6/6fe758b019377d7df77de64802df5ca6-250x250.png?validfrom=1682966875&validto=1685559775&&hash=yqP1pHq2ssEmYFhj5QjA38ZFZy0%3D"},"chatChannel":"adachi91","mention":false,"mentionedUsername":null}}
+[Socket]: {"identifier":"{\"channel\":\"EventLogChannel\",\"stream_id\":\"adachi91\"}","message":{"event":"StreamEvent","id":"b5fa6c52-882a-4f23-a79c-a40b3a0bd0de","type":"ChatMessageReceived","text":"new_message","metadata":"{}","createdAt":"2023-05-01T18:52:55Z","updatedAt":"2023-05-01T18:52:55Z"}} 
+             */
+        }
+
+        public async Task parseChatChannelMessage(string _sockMessage)
+        { //come here if channel == ChatChannel, 
+            if (!_sockMessage.Contains("\"ChatChannel\""))
+                return;
+            /*
+             * [Socket]: {
+             * "identifier":"{
+             *  \"channel\":\"ChatChannel\",
+             *  \"stream_id\":\"adachi91\",
+             *  \"user_id\":\"7b33f519-b785-42ee-b2e0-5b7007149f79\"}",
+             *  "message":
+             *  {
+             *      "event":"ChatMessage",
+             *      "createdAt":"2023-05-01T18:47:01Z",
+             *      "messageId":"3ce41b14-83b1-41f1-b9ee-67415d7ae604",
+             *      "type":"new_message",
+             *      "visibility":"public",
+             *      "text":"I've become so numb, hello bot",
+             *      "botCommand":null,
+             *      "botCommandArg":null,
+             *      "emotesUsed":[],
+             *      "author":{
+             *          "slug":"adachi91",
+             *          "username":"Adachi91",
+             *          "usernameColor":null,
+             *          "displayNameWithFlair":"{{{streamerBadge}}} Adachi91",
+             *          "signedPhotoUrl":"https://images.joystick.tv/content/videos/joystick/production/6fe7/58b0/1937/7d7d/f77d/6fe758b019377d7df77de64802df5ca6/6fe758b019377d7df77de64802df5ca6.png?validfrom=1682966521&validto=1685559421&&hash=nRCHzwhWtcdxTR022L%2FNAet%2BbtA%3D",
+             *          "signedPhotoThumbUrl":"https://images.joystick.tv/content/videos/joystick/production/6fe7/58b0/1937/7d7d/f77d/6fe758b019377d7df77de64802df5ca6/6fe758b019377d7df77de64802df5ca6-250x250.png?validfrom=1682966521&validto=1685559421&&hash=BONQeYylVm0DjzgHOFk4QseqO2M%3D"
+             *      },
+             *      "streamer":{
+             *          "slug":"adachi91",
+             *          "username":"Adachi91",
+             *          "usernameColor":null,
+             *          "signedPhotoUrl":"https://images.joystick.tv/content/videos/joystick/production/6fe7/58b0/1937/7d7d/f77d/6fe758b019377d7df77de64802df5ca6/6fe758b019377d7df77de64802df5ca6.png?validfrom=1682966521&validto=1685559421&&hash=nRCHzwhWtcdxTR022L%2FNAet%2BbtA%3D",
+             *          "signedPhotoThumbUrl":"https://images.joystick.tv/content/videos/joystick/production/6fe7/58b0/1937/7d7d/f77d/6fe758b019377d7df77de64802df5ca6/6fe758b019377d7df77de64802df5ca6-250x250.png?validfrom=1682966521&validto=1685559421&&hash=BONQeYylVm0DjzgHOFk4QseqO2M%3D"
+             *     },
+             *     "chatChannel":"adachi91",
+             *     "mention":false,
+             *     "mentionedUsername":null
+             * }
+             *}
+[Socket]: 
+[Socket]: {"identifier":"{\"channel\":\"EventLogChannel\",\"stream_id\":\"adachi91\"}","message":{"event":"StreamEvent","id":"3af57a80-bfa3-4fe8-98cd-c8e8ae496a3f","type":"ChatMessageReceived","text":"new_message","metadata":"{}","createdAt":"2023-05-01T18:47:01Z","updatedAt":"2023-05-01T18:47:01Z"}}
+             */
+
+            dynamic jsonMsg = JsonSerializer.Deserialize<dynamic>(_sockMessage);
+
+            //emotes used??
+            Console.WriteLine("[{0}] {1}: {2}", jsonMsg.message.createdAt, jsonMsg.message.author.username, jsonMsg.message.text);
+            //[00:00:00] Adachi: Hello --Basic
+            //[Adachi91][00:00:00] John: Hello --Channel
+            //displayNameWithFlair {{{streamerBadge}}} ? stream_id == author.username - Is the stream Owner
+        }
+
+
         public async Task Subscribe(string _event, bool debug = false, CancellationToken cancellationToken = default)
         {
             if (!_connected)
@@ -199,12 +265,24 @@ namespace Joystick_tv__Bot
                 //var test6 = "{\"command\":\"subscribe\",\"identifier\":\"{\"channel\":\"SystemEventChannel\",\"user_id\":\"shimamura\"}\"}";
                 //string[] testy = { "{\"command\":\"subscribe\",\"identifier\":\"{ \"channel\":\"ApplicationChannel\"}\"}", "{\"command\":\"subscribe\",\"identifier\":\"{\"channel\":\"SystemEventChannel\",\"user_id\":\"shimamura\"}\"}" };
                 //string[] testy = { "{\"command\":\"subscribe\",\"identifier\":\"{ \"channel\":\"ApplicationChannel\"}\"}", "{\"command\":\"subscribe\",\"identifier\":\"{\"channel\":\"SystemEventChannel\",\"user_id\":\"shimamura\"}\"}" };
-                string[] testy = { "{\"command\":\"subscribe\",\"identifier\":\"{ \"channel\":\"ApplicationChannel\"}\"}", "{\"command\":\"subscribe\",\"identifier\":\"{\"channel\":\"SystemEventChannel\",\"user_id\":\"shimamura\"}\"}" };
+                string[] testy = {
+                    "{\"command\":\"subscribe\",\"identifier\":\"{\\\"channel\\\":\\\"ApplicationChannel\\\"}\"}",
+                    "{\"command\":\"subscribe\",\"identifier\":\"{\\\"channel\\\":\\\"SystemEventChannel\\\",\\\"user_id\\\":\\\"" + token.username + "\\\"}\"}",
+                    "{\"command\":\"subscribe\",\"identifier\":\"{\\\"channel\\\":\\\"EventLogChannel\\\",\\\"stream_id\\\":\\\"adachi91\\\"}\"}",
+                    "{\"command\":\"subscribe\",\"identifier\":\"{\\\"channel\\\":\\\"ChatChannel\\\",\\\"stream_id\\\":\\\"adachi91\\\",\\\"user_id\\\":\\\"" + token.UUID + "\\\"}\"}",
+                    "{\"command\":\"subscribe\",\"identifier\":\"{\\\"channel\\\":\\\"WhisperChatChannel\\\",\\\"user_id\\\":\\\"" + token.username + "\\\",\\\"stream_id\\\":\\\"adachi91\\\"}\"}",
+                };
+
+                //{"command":"subscribe","identifier":"{\"channel\":\"EventLogChannel\",\"stream_id\":\"adachi91\"}"}
+                //{"command":"subscribe","identifier":"{\"channel\":\"ChatChannel\",\"stream_id\":\"adachi91\",\"user_id\":\"b4fa89f7-7a7e-4a60-ba06-ac853f0b99f9\"}"}
+                //{"command":"subscribe","identifier":"{\"channel\":\"WhisperChatChannel\",\"user_id\":\"adachi91\",\"stream_id\":\"adachi91\"}"}
+
+
                 //string[] testy = { "{\"command\":\"subscribe\",\"identifier\":\"{\"channel\":\"ChatChannel\",\"stream_id\":\"adachi91\",\"user_id\":\"7b33f519-b785-42ee-b2e0-5b7007149f79\"}\" }", "{\"command\":\"subscribe\",\"identifier\":\"{ \"channel\":\"ApplicationChannel\"}\"}", "{\"command\":\"subscribe\",\"identifier\":\"{\"channel\":\"SystemEventChannel\",\"user_id\":\"shimamura\"}\"}" };
                 //string[] testy = { @"{""command"":""subscribe"",""identifier"":""{""channel"":""ApplicationChannel""}""}""", "{\"command\":\"subscribe\",\"identifier\":\"{\"channel\":\"SystemEventChannel\",\"user_id\":\"shimamura\"}\"}" };
                 ArraySegment<byte> buffer;
 
-                for(int i = 0; i<2-1; i++)
+                for(int i = 0; i<=4; i++)
                 {
                     //Console.WriteLine("-------------");
                     Console.WriteLine(">> {0}", testy[i]);
@@ -220,9 +298,14 @@ namespace Joystick_tv__Bot
 
             List<Object> msg = _events.MessageConstructor(_event);
 
-            foreach(var messy in msg)
+            var options = new JsonSerializerOptions
             {
-                var json = JsonSerializer.Serialize(messy);
+                Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping
+            };
+
+            foreach (var messy in msg)
+            {
+                var json = JsonSerializer.Serialize(messy, options);
                 Console.WriteLine("[Client]: {0}", json);
                 var buffer = new ArraySegment<byte>(Encoding.UTF8.GetBytes(json));
                 try {
@@ -256,8 +339,8 @@ namespace Joystick_tv__Bot
                     Console.WriteLine("[Socket]: {0}", message);
                     if (message.Contains("{\"type\":\"welcome\"}"))
                     {
-                        Task.Run(() => Subscribe("connect", false, cancellationToken));
-                        Task.Run(() => Subscribe("subscribe", false, cancellationToken));
+                        //Task.Run(() => Subscribe("connect", false, cancellationToken));
+                        //Task.Run(() => Subscribe("subscribe", false, cancellationToken));
                     }
                 } else {
                     Console.WriteLine("Invalid WebSocketMessageType: {0}", result.MessageType.ToString());
