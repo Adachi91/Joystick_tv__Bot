@@ -9,7 +9,7 @@ using System.Text.Json; //
 using System.Collections.Generic;
 using System.Text.Encodings.Web;
 
-namespace Joystick_tv__Bot
+namespace ShimamuraBot
 {
     class client
     {

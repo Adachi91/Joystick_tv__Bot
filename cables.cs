@@ -3,9 +3,8 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
-using Newtonsoft.Json;
 
-namespace Joystick_tv__Bot
+namespace ShimamuraBot
 {
     //cables.cableBuilder('adachi91');
     //cables.ApplicationChannel.subscription
