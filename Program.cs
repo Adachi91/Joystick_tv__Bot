@@ -54,6 +54,12 @@ namespace ShimamuraBot
             Console.WriteLine(headerBorder);
             Console.ForegroundColor = origColor;
 
+
+            /*
+             * 
+             * I gave up on colorful console it sux, and I don't feel like really making a winform and my love for consoles tells me it shall be this, idk maybe make a GUI wrapper and accept parameters from it if anyone ever wants this pile of shit
+             */ 
+
             if (initRender) return;
 
             //shift buffer
@@ -80,15 +86,44 @@ namespace ShimamuraBot
         {
             AppDomain.CurrentDomain.ProcessExit += CurrentDomainOnProcessExit;
             Console.CancelKeyPress += ConsoleOnCancelKeyPress;
+
+            Console.ForegroundColor = ConsoleColor.Cyan;
             string headerBorder = new string('=', Console.WindowWidth);
-            HandleBuffer("", headerBorder, true);
+            Console.WriteLine(headerBorder);
+            Console.SetCursorPosition(0, 1);
+            Console.Write($"===");
+            Console.SetCursorPosition(Console.WindowWidth / 2 - 27, 1);
+            Console.Write($"♥ Shimamura Bot ♥ v{Assembly.GetExecutingAssembly().GetName().Version}. Welcome !");
+            Console.SetCursorPosition(Console.WindowWidth - 3, 1);
+            Console.Write("===");
+            Console.SetCursorPosition(0, 2);
+            Console.WriteLine(headerBorder);
+            Console.ForegroundColor = ConsoleColor.White;
+
             Console.Write("> ");
 
-            while (true) {
+            while (running) {
                 string input = Console.ReadLine();
 
+                switch(input)
+                {
+                    case "exit" or "quit" or "stop":
+                        running = false;
+                        break;
+                    case "oauth":
+                        //TODO: create class and test OAuth on playground.
+                        break;
+                    case "config":
+                        //TODO: settings
+                        break;
+                    case "fun":
+                        //TODO: Setup things like YT, soundcloud, vemo video play commands, and other stuff
+                        break;
+                    default:
+                        Console.WriteLine("type help");
+                        break;
+                }
 
-                HandleBuffer(input, headerBorder);
                 Console.Write("> ");
             }
 

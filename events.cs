@@ -1,8 +1,5 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace ShimamuraBot
 {
@@ -25,7 +22,15 @@ namespace ShimamuraBot
         public bool isSubscribed;
         public Dictionary<string, bool> Subscriptions;
 
+        public class OAuthisFunAuthTime
+        {
+            OAuthisFunAuthTime(string _idk)
+            {
+                //constructor me and rename my ass
+            }
+        }
 
+        //not to spec delete this.
         enum Channels {
             ApplicationChannel, //only required on first connection or reconnection
             SystemEventChannel, //as above.
@@ -40,7 +45,7 @@ namespace ShimamuraBot
         /// <param name="command">Command type (connect, subscribe, unsubscribe, sendmessage, disconnect)</param>
         /// <param name="message">Only required for message type sendmessage</param>
         /// <returns></returns>
-        public List<Object> MessageConstructor(string command, string message = "")
+        public List<Object> MessageConstructor(string command, string message = "") //repurpose this
         {
             List<Object> msg = new List<object>();
             //List<string> msg = new List<string>();
