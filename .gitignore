@@ -16,8 +16,11 @@
 # Mono auto generated files
 mono_crash.*
 
+# Sensitive
+[Tt]oken.cs
+[Jj]oystick_[Bb]ot_[Aa][Pp][Ii].md
+
 # Build results
-token.cs
 [Dd]ebug/
 [Dd]ebugPublic/
 [Rr]elease/
