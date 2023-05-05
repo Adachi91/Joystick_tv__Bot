@@ -145,23 +145,34 @@ namespace ShimamuraBot
             //displayNameWithFlair {{{streamerBadge}}} ? stream_id == author.username - Is the stream Owner
         }
 
+
+        private bool SubscriptionSuccess(string resp) {
+            bool result = false;
+            bool somethingwentwrong = false;
+            //yada yada code stuff that checks if it was rejected or successful
+
+            if (somethingwentwrong)
+                throw new Exception($"I couldn't understand if the Subscription was successful or not.\r\n{resp}\r\n");
+
+            return result;
+        }
+
         /// <summary>
         /// Keys track of what channels the bot is subscribed to so it can ubsccruibe easier I think I just had   a stroke writing that.
         /// </summary>
         /// <param name="channel">Channel name</param>
-        public void AcknowledgeSubscription(string channel)
+        public void AcknowledgeSubscription(string channel, bool fuckitsjustaname = false)
         { //I want to keep this here so I can parse incoming sucessfull subscriptions and then command the list from here, instead of a fire and forget in events
+
+            //C# 10 introduced new rules for accessing static members. Previously, it was allowed to access a static member using an instance reference, but now it's not allowed anymore.
             if (_events.Subscriptions.ContainsKey(channel))
                 _events.Subscriptions[channel] = !_events.Subscriptions[channel];
             else
-                _events.Subscriptions.Add(channel, true); //probably bad idea to hardcode true but fuck it with a bucket.
+                _events.Subscriptions.Add(channel, fuckitsjustaname);
         }
 
         private void MainParser(string resp)
         { //Break down resp and send them to the correct subparser or build a gigantic pile of shit here.
-
-
-
 
             if(resp.Contains(""))
             {
@@ -225,7 +236,7 @@ namespace ShimamuraBot
                 try {
                     await _webSocket.SendAsync(buffer, WebSocketMessageType.Text, true, cancellationToken);
                 } catch (Exception ex) {
-                    Console.WriteLine("Shit exploded in the Subscribe Method - {0}", ex);
+                    Console.WriteLine($"Shit exploded in the Subscribe Method - {ex}");
                 }
             }
         }
@@ -253,7 +264,7 @@ namespace ShimamuraBot
                 try {
                     await _webSocket.SendAsync(buffer, WebSocketMessageType.Text, true, CancellationToken.None);
                 } catch (Exception ex) {
-                    Console.WriteLine("Shit exploded in the Unsubscribe method, idk kill it or something :: {0}", ex);
+                    Console.WriteLine($"Shit exploded in the Unsubscribe method, idk kill it or something :: {ex}");
                 }
             }
             Console.WriteLine("Jobs done, zug zug");
@@ -262,15 +273,15 @@ namespace ShimamuraBot
         public async Task Listen(CancellationToken cancellationToken = default)
         {
             if (!_connected)
-                throw new InvalidOperationException("Not connected to WebSocket endpoint.");
+                throw new InvalidOperationException("Listener: The websocket was not open.");
 
-            var buffer = new byte[1024];
+            byte[] buffer = new byte[4096]; //1024 bytes IF the header Sec-Websocket-Maximum-Message-Size is detected, then that is the maximum size the buffer can be to prevent DDoSing.
             while (_webSocket.State == WebSocketState.Open && !cancellationToken.IsCancellationRequested)
             {
-                var result = await _webSocket.ReceiveAsync(new ArraySegment<byte>(buffer), cancellationToken);
+                WebSocketReceiveResult result = await _webSocket.ReceiveAsync(new ArraySegment<byte>(buffer), cancellationToken);
                 if (result.MessageType == WebSocketMessageType.Text)
                 {
-                    var message = Encoding.UTF8.GetString(buffer, 0, result.Count);
+                    string message = Encoding.UTF8.GetString(buffer, 0, result.Count);
                     //if (!message.Contains("ping"))
                         Console.WriteLine("[Socket]: {0}\r\n", message);
 
@@ -279,6 +290,8 @@ namespace ShimamuraBot
                         //Task.Run(() => Subscribe("connect", false, cancellationToken));
                         //Task.Run(() => Subscribe("subscribe", false, cancellationToken));
                     }
+                } else if (result.MessageType == WebSocketMessageType.Close) { 
+
                 } else {
                     Console.WriteLine("Invalid WebSocketMessageType: {0}", result.MessageType.ToString());
                 }
