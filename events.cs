@@ -1,12 +1,19 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Linq;
+using System.Net.Http;
+using System.Threading;
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Threading.Tasks;
-using IdentityModel;
-using IdentityModel.Client; //fucking samples don't match current version?
-using IdentityModel.Internal;
-using Microsoft.AspNetCore.Http.Features;
+//using IdentityModel;
+//using IdentityModel.Client;
+//using IdentityModel.Internal;
+using IdentityModel.OidcClient;
+using IdentityModel.OidcClient.Browser;
+using static System.Formats.Asn1.AsnWriter;
+//using Microsoft.AspNetCore.Http;
+//using Microsoft.AspNetCore.Http.Features;
 
 namespace ShimamuraBot
 {
@@ -20,15 +27,15 @@ namespace ShimamuraBot
          */
         private bool _disposed = false;
 
-        private static string theChannel = token.channel;
-        private static string _user_id;
-        private static string _user_uuid;
-        private static string _stream_id;
-        private static string _userToken;
+        private string theChannel = token.channel;
+        private string _user_id;
+        private string _user_uuid;
+        private string _stream_id;
+        private string _userToken;
 
         public Dictionary<string, bool> Subscriptions = new Dictionary<string, bool>();
 
-        public static async void testNow()
+        /*public static async void testNow()
         {
             var client = new HttpClient();
 
@@ -46,20 +53,19 @@ namespace ShimamuraBot
                     { "scope", "api1" }
                 }
              });
-        }
+        }*/
 
         public class OAuthClient //makes sense to me because it's the client sheeeeeeeeeeeeesh
         {
-            private static string Authority { get; set; }
-            private static string redirectURI { get; set; }
-            private static string scope { get; set; }
-            private static string clientIdentity { get; set; }
-            private static string clienttSecret { get; set; }
-            private static string state { get; set; }
-            //you barely have to write shit identitymodel has built in classes to format most things you were going to create so eh ya just read the docs.
-
-            private static string playgroundnounce = "ehwNi41AnX1M8ljO";
-
+            private readonly string Authority;
+            private readonly string redirectURI;
+            private readonly string scope;
+            private readonly string clientIdentity;
+            private readonly string clienttSecret;
+            private readonly string state;
+            private string code;
+            private string fullURI { get; set; }
+            private browser loopbackBrowser { get; set; }
             /*
              * Terminologies are fun and so fucking obtuse. at least some are intutitive
              * This type of application is a loopback OAuth application, the request never leaves the device as it's meant to be a
@@ -77,19 +83,88 @@ namespace ShimamuraBot
              * the docs, it's very well documented.
              */
 
-            //I'm going to work on this later I need to do a bit of the old reading.
-            OAuthClient(string _authority, string _redirectURI, string _clientidentity, string _clientseret, string _scope = null)
+            OAuthClient(string _authority, string _clientidentity, string _clientseret, string _redirectURI, string _scope = null)
             {
                 Authority = _authority;
-                redirectURI = _redirectURI;
                 clientIdentity = _clientidentity;
                 clienttSecret = _clientseret;
+                redirectURI = _redirectURI;
                 scope = _scope ?? "ALLURBASES";
+
+                state = Generatestate();
+
+                fullURI = token.OpenerURI + state; //Launch URI
+                loopbackBrowser = new browser(8087, @"/auth"); //Callback
             }
 
-            private static async Task LogIn()
+
+
+            private async Task LogIn()
             {
-                browser idksomefuckedupshitalsodidyouknowthatunicornsarenotrealstoplookingforthemtheyrunawayeverytimeandleaveyoufeelingdeadinsideyo = new browser();
+
+                var options = new OidcClientOptions(
+                    //Authority: "",
+                    //clientId: "",
+                    //clienttSecret: "",
+                    //redirectURI: "",
+                );
+                //no constructor was available????
+                options.Authority = Authority;
+                options.ClientId = clientIdentity;
+                options.ClientSecret = clienttSecret;
+                options.RedirectUri = redirectURI;
+                options.Scope = scope;
+                options.Browser = loopbackBrowser;
+                options.FilterClaims = false;
+                options.LoadProfile = false;
+            }
+
+
+            private static string Generatestate() {
+                string chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+                Random rand = new Random();
+                return new string(Enumerable.Repeat(chars, 32).Select(s => s[rand.Next(s.Length)]).ToArray());
+            }
+
+
+            /// <summary>
+            /// This will return what we's previously called Apollo token that we took from our 2nd account. eh come back and clean this up
+            /// </summary>
+            /// <param name="refreshRequestREEEEEEEE">a</param>
+            /// <param name="cancellation"></param>
+            /// <returns></returns>
+            public async Task RequestToken(bool refreshRequestREEEEEEEE = false, CancellationToken cancellation = default)
+            {
+                using(HttpClient client = new HttpClient())
+                {
+                    client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Basic", token.Basic);
+                    client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+                    client.DefaultRequestHeaders.Add(token.CUSTARD_Header, state);
+                    FormUrlEncodedContent postOptions;
+                    string secretshitstoredsomewhereintheuniverse = "EEEEEEEEEEEEEEEHhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh"; //placeholder
+
+                    if (!refreshRequestREEEEEEEE)
+                    {
+                        postOptions = new FormUrlEncodedContent(new[]
+                        {
+                            new KeyValuePair<string, string>("grant_type", "authorization_code"),
+                            new KeyValuePair<string, string>("code", code),
+                            new KeyValuePair<string, string>("redirectUri", redirectURI)
+                        });
+                    } else {
+                        //request frerefshres I DONT STROKE
+                        postOptions = new FormUrlEncodedContent(new[]
+                        {
+                            new KeyValuePair<string, string>("grant_type", "refresh_token"),
+                            new KeyValuePair<string, string>("refresh_token", secretshitstoredsomewhereintheuniverse),
+                            new KeyValuePair<string, string>("redirectUri", redirectURI)
+                        });
+                    }
+
+                    var tokenRequest = await client.PostAsync(token.baseAPIURI, postOptions, cancellation);
+
+                    Console.WriteLine(tokenRequest.Content.ToString());
+                }
             }
         }
 

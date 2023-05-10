@@ -94,7 +94,7 @@ namespace ShimamuraBot
                 }
                 else
                 {
-                    throw;
+                    throw new Exception("Unable to Launch System Browser.");
                 }
             }
         }

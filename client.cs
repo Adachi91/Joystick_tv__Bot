@@ -291,7 +291,7 @@ namespace ShimamuraBot
                         //Task.Run(() => Subscribe("subscribe", false, cancellationToken));
                     }
                 } else if (result.MessageType == WebSocketMessageType.Close) { 
-
+                    
                 } else {
                     Console.WriteLine("Invalid WebSocketMessageType: {0}", result.MessageType.ToString());
                 }
