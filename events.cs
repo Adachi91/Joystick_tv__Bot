@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Net.Http;
 using System.Threading;
 using System.Net.Http;
 using System.Net.Http.Headers;
@@ -11,7 +10,7 @@ using System.Threading.Tasks;
 //using IdentityModel.Internal;
 using IdentityModel.OidcClient;
 using IdentityModel.OidcClient.Browser;
-using static System.Formats.Asn1.AsnWriter;
+//using static System.Formats.Asn1.AsnWriter;
 //using Microsoft.AspNetCore.Http;
 //using Microsoft.AspNetCore.Http.Features;
 
@@ -83,7 +82,7 @@ namespace ShimamuraBot
              * the docs, it's very well documented.
              */
 
-            OAuthClient(string _authority, string _clientidentity, string _clientseret, string _redirectURI, string _scope = null)
+            public OAuthClient(string _authority, string _clientidentity, string _clientseret, string _redirectURI, string _scope = null)
             {
                 Authority = _authority;
                 clientIdentity = _clientidentity;
@@ -97,7 +96,26 @@ namespace ShimamuraBot
                 loopbackBrowser = new browser(8087, @"/auth"); //Callback
             }
 
+            public async void SendA()
+            {
+                browser.OpenBrowser(fullURI);
+                return;
+                OidcClientOptions clientOptions = new OidcClientOptions()
+                {
+                    Authority = Authority,
+                    ClientId = clientIdentity,
+                    ClientSecret = clienttSecret,
+                    Scope = scope,
+                    RedirectUri = redirectURI,
+                    Browser = loopbackBrowser,
+                    FilterClaims = false,
+                    LoadProfile = false,
+                };
+                IdentityModel.OidcClient.Browser.BrowserOptions aa = new BrowserOptions(fullURI, redirectURI);
 
+                BrowserResult a = await loopbackBrowser.InvokeAsync(aa);
+                Console.WriteLine(a.Response);
+            }
 
             private async Task LogIn()
             {
@@ -168,6 +186,11 @@ namespace ShimamuraBot
             }
         }
 
+        public void TouchThings()
+        {
+            //var a = new OAuthClient("", "", "", "", "bot");
+        }
+
         /// <summary>
         /// Constructs messages to send to the API endpoint
         /// </summary>
@@ -203,7 +226,7 @@ namespace ShimamuraBot
                     msg.Add(new { command = "unsubscribe", identifier = new { channel = "WhisperChatChannel", user_id = _user_id, stream_id = _stream_id } });
                     break;
                 case "sendmessage": //Please make sure this is utf88888888888888888888888888888888888888888888888888888888888 thanks. I like Unicode though, I heard it's best for the web,
-                    msg.Add(new { command = "message", identifier = new { channel = "ChatChannel", stream_id = _stream_id, user_id = _user_uuid  }, data = new { text =  message, token = _userToken, action = "send_message" } });
+                    msg.Add(new { command = "message", identifier = new { channel = "ChatChannel", stream_id = _stream_id, user_id = _user_uuid  }, data = new { text =  "Hello World", token = _userToken, action = "send_message" } });
                     break;
                 case "disconnect": //Call unsunscribe first  ? pls thx luv u ♥
                     msg.Add(new { command = "unsubscribe", identifier = "{\"channel\":\"ApplicationChannel\"}" });

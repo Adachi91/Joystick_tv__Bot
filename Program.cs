@@ -29,7 +29,7 @@ namespace ShimamuraBot
        // private static Dictionary<int, string> consoleBuffer = new Dictionary<int, string>(100);
         private static List<string> consoleBuffer = new List<string>();
         private static int BufferSizeMax = 100;
-
+        private static TempServer server = new TempServer();
         /// <summary>
         /// Renders the output display, YES I really spent all morning writing this and I feel horrible about it.
         /// </summary>
@@ -118,6 +118,17 @@ namespace ShimamuraBot
                         break;
                     case "fun":
                         //TODO: Setup things like YT, soundcloud, vemo video play commands, and other stuff
+                        break;
+                    case "sendit":
+                        events stateful = new events(token.username, BotUUID, "", "");
+                        events.OAuthClient oAuth = new events.OAuthClient("", "", "","","bot");
+                        oAuth.SendA();
+                        break;
+                    case "listen":
+                        server.StartAsync();
+                        break;
+                    case "stoplisten":
+                        server.Stop();
                         break;
                     default:
                         Console.WriteLine("type help");

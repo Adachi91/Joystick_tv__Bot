@@ -43,7 +43,7 @@ namespace ShimamuraBot
             return port;
         }
 
-        public async Task<BrowserResult> InvokeAsync(BrowserOptions options, CancellationToken cancellationToken)
+        public async Task<BrowserResult> InvokeAsync(BrowserOptions options, CancellationToken cancellationToken = default)
         {
             using (var listener = new LoopbackHttpListener(Port, _path))
             {
