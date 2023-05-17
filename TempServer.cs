@@ -20,14 +20,12 @@ namespace ShimamuraBot
         /// </summary>
         public TempServer(events.OAuthClient OAuthPtr) {
             if (!events.OAuthClient.VerifyPortAccessibility(Program.LoopbackPort)) {
-                Task.Run(() => StartAsync(OAuthPtr));
-            } else {
-                Print($"Unable to start Authorization flow. Port {Program.LoopbackPort} is being used by another program,,", 3);
-                return;
-            }
+                listener = new HttpListener();
+                listener.Prefixes.Add($"http://127.0.0.1:{Program.LoopbackPort}/auth/");
 
-            listener = new HttpListener();
-            listener.Prefixes.Add("http://127.0.0.1:8087/");
+                Task.Run(() => StartAsync(OAuthPtr));
+            } else
+                Print($"Unable to start Authorization flow. Port {Program.LoopbackPort} is being used by another program,,", 3);
         }
 
         /// <summary>
@@ -38,7 +36,7 @@ namespace ShimamuraBot
         public async Task StartAsync(events.OAuthClient OAuthPtr)
         {
             listener.Start();
-            Print("HTTPListener started on http://127.0.0.1:8087/auth/", 1);
+            Print($"HTTPListener started on http://127.0.0.1:{Program.LoopbackPort}/auth/", 1);
             
             while (listener.IsListening) {
                 try {
@@ -54,7 +52,6 @@ namespace ShimamuraBot
                     }*/
                     var requestBody = await new StreamReader(request.InputStream).ReadToEndAsync();
 
-                    if(!listener.IsListening) context.Response.Abort(); //monkey patching
                     if (!string.IsNullOrEmpty(request.QueryString["state"]))
                         if (request.QueryString["state"] == OAuthPtr.state)
                             if (!string.IsNullOrEmpty(request.QueryString["code"]))
@@ -71,21 +68,20 @@ namespace ShimamuraBot
                     response.Close();
                     if(response.StatusCode == 200) {
                         stopReuqest = true;
-                        break;
+                        listener.Stop();
+                        Task.Delay(1000).Wait();
                     }
                 } catch (HttpListenerException ex) {
-                    if(ex.ErrorCode == 995 && stopReuqest)
-                    {
+                    if(ex.ErrorCode == 995 && stopReuqest) {
                         //everything is fine, this is fine, the fire is fine.
                         return;
                     }
-                    Print($"There was an unexpected error in HTTPListener :: {ex}", 3);
+                    Print($"Unexpected error in TempServer (!995): {ex}", 3);
+                } catch (Exception ex)
+                {
+                    Print($"Unexpected Error in TempServer (Unknown): {ex}", 3);
                 }
             }
-            listener.Stop();
-            Task.Delay(1000).Wait();
-            if (listener.IsListening)
-                Print($"THE FUCKING WORLD IS DOOMED", 4);
         }
 
         /// <summary>
@@ -93,11 +89,11 @@ namespace ShimamuraBot
         /// </summary>
         public void Stop() {
             if (listener.IsListening) {
+                stopReuqest = true;
                 listener.Stop();
                 Task.Delay(1000).Wait();
-            } else {
-                Print("Listener has finally been murdered, it's fucking dead, we did it crew, holy shit. That's a boss battle for ya.", 2);
-            }
+            } else
+                Print($"HttpListener is not currently running..", 0);
         }
     }
 }

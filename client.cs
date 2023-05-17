@@ -27,6 +27,7 @@ namespace ShimamuraBot
          * 1003 indicates that an endpoint is terminating the connection because it has received a type of data it cannot accept (e.g., an endpoint that understands only text data MAY send this if it receives a binary message).
          */
 
+        private void Print(string msg, int lvl) => events.Print(msg, lvl);
         private Uri _uri { get; set; }
         public bool _connected { get; private set; }
         public bool isExiting { get; set; }
