@@ -5,14 +5,10 @@ using System.Threading;
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Threading.Tasks;
-//using IdentityModel;
-//using IdentityModel.Client;
-//using IdentityModel.Internal;
-using IdentityModel.OidcClient;
-using IdentityModel.OidcClient.Browser;
-//using static System.Formats.Asn1.AsnWriter;
-//using Microsoft.AspNetCore.Http;
-//using Microsoft.AspNetCore.Http.Features;
+using System.Net.Sockets;
+using System.Text;
+using System.Diagnostics;
+using System.Runtime.InteropServices;
 
 namespace ShimamuraBot
 {
@@ -34,25 +30,57 @@ namespace ShimamuraBot
 
         public Dictionary<string, bool> Subscriptions = new Dictionary<string, bool>();
 
-        /*public static async void testNow()
+        private enum Death
         {
-            var client = new HttpClient();
+            AllYourBaseAreBelongToUs,
+            ItsNotYouItsMeNoSeriouslyIDied,
+            InitiatingSelfDestructionCountdown,
+            ITookAnAcornToTheKnee,
+            YouShallNotPass,
+            HoldMyBeer,
+            HoldMyCosmo,
+            GameOverMan,
+            HoustonWeAreAlreadyDeadByTheTimeYouReceiveThisTransmission,
+            MyShoeFlewOff,
+            ThereWasASpoonButWhatItDidWasALie,
+            WouldYouLikeToDevelopeAnAPPWithMe,
+            WellFuck,
+            SoLongAndThanksForAllTheFish,
+            HeMayHaveShippedHisBedButILitterallyShitTheBed,
+            SomedayIWantToBePaintedLikeOneOfYourFrenchGirls,
+            MyCreatorIsObviouslyAMoronForCreatingAllTheseMessages
+        }
 
-            var response = await client.RequestTokenAsync(new TokenRequest
-            {
-                Address = "https://authorization-server.com/authorize",
-                GrantType = "custom",
+        /// <summary>
+        /// Why? because I'm nuts, and I like lua, so fuck me, no fuck you, idk could be enjoyable. Also fuck that one mother fucker on github for saying that Vulva is a profane word, you fucking moron. What? I can go on rants inside method descriptors.
+        /// </summary>
+        /// <param name="text">The Message</param>
+        /// <param name="level">Level Range - Debug-0, Normal-1, Warn-2, Error-3, Imminent_SelfDestruction-4 (Never use)</param>
+        public static void Print(string text, int level)
+        {
+            ConsoleColor current = Console.ForegroundColor;
+            ConsoleColor debug = ConsoleColor.Cyan;
+            ConsoleColor warn = ConsoleColor.Yellow;
+            ConsoleColor error = ConsoleColor.Red;
 
-                ClientId = "client",
-                ClientSecret = "secret",
 
-                Parameters =
-                {
-                    { "custom_parameter", "custom value"},
-                    { "scope", "api1" }
-                }
-             });
-        }*/
+            switch(level) {
+                case 0: Console.ForegroundColor = debug; Console.Write("[Debug]:"); Console.ForegroundColor = current; Console.Write($" {text}\r\n");
+                    break;
+                case 1: Console.WriteLine($"[System]: {text}");
+                    break;
+                case 2: Console.ForegroundColor = warn; Console.Write("[WARN]:"); Console.ForegroundColor = current; Console.Write($" {text}\r\n");
+                    break;
+                case 3: Console.ForegroundColor = error; Console.Write("[ERROR]:"); Console.ForegroundColor = current; Console.Write($" {text}\r\n");
+                    break;
+                case 4:
+                    Random rand = new Random();
+                    Console.WriteLine($"If you're seeing this then somehow, somewhere in this vast universe someone invoked the wrath of Hel▲6#╒e¢◄e↕Y8AéP╚67/Y1R\\6xx9/5Ωφb198 . . . . . {(Death)Enum.GetValues(typeof(Death)).GetValue(rand.Next(Enum.GetValues(typeof (Death)).Length))}");
+                    break;
+                default: Console.WriteLine("I don't even want to know.");
+                    break;
+            }
+        }
 
         public class OAuthClient //makes sense to me because it's the client sheeeeeeeeeeeeesh
         {
@@ -61,10 +89,10 @@ namespace ShimamuraBot
             private readonly string scope;
             private readonly string clientIdentity;
             private readonly string clienttSecret;
-            private readonly string state;
-            private string code;
+            public readonly string state;
+            public string code;
             private string fullURI { get; set; }
-            private browser loopbackBrowser { get; set; }
+            //private browser loopbackBrowser { get; set; }
             /*
              * Terminologies are fun and so fucking obtuse. at least some are intutitive
              * This type of application is a loopback OAuth application, the request never leaves the device as it's meant to be a
@@ -76,12 +104,16 @@ namespace ShimamuraBot
              * scope => self explanatory
              * leaving some shit out here on purpose because documentation isn't released yet.
              * Basic => self exp
-             * why did I stop typing to text someone now I forgot where I was.
-             * 
-             * you have some work to do to figure out how to use this framework to spinup temporary webserver and make the call but should be easy, just need to read
-             * the docs, it's very well documented.
              */
 
+            /// <summary>
+            /// Construct the OAuthClient and it's stateful parameters.
+            /// </summary>
+            /// <param name="_authority">The Authority API Endpoint (Not nessacarily the same as the Flow endpoint</param>
+            /// <param name="_clientidentity">Client Identifaction</param>
+            /// <param name="_clientseret">Client Secret, will be used for Basic</param>
+            /// <param name="_redirectURI">RedirectURI, should be 127.0.0.1:port because this is meant to only be a loopback</param>
+            /// <param name="_scope">Optional - Scope for if it's changed in the future</param>
             public OAuthClient(string _authority, string _clientidentity, string _clientseret, string _redirectURI, string _scope = null)
             {
                 Authority = _authority;
@@ -93,57 +125,88 @@ namespace ShimamuraBot
                 state = Generatestate();
 
                 fullURI = token.OpenerURI + state; //Launch URI
-                loopbackBrowser = new browser(8087, @"/auth"); //Callback
+                //loopbackBrowser = new browser(8087, @"/auth"); //Callback
             }
 
-            public async void SendA()
-            {
-                browser.OpenBrowser(fullURI);
-                return;
-                OidcClientOptions clientOptions = new OidcClientOptions()
-                {
-                    Authority = Authority,
-                    ClientId = clientIdentity,
-                    ClientSecret = clienttSecret,
-                    Scope = scope,
-                    RedirectUri = redirectURI,
-                    Browser = loopbackBrowser,
-                    FilterClaims = false,
-                    LoadProfile = false,
-                };
-                IdentityModel.OidcClient.Browser.BrowserOptions aa = new BrowserOptions(fullURI, redirectURI);
-
-                BrowserResult a = await loopbackBrowser.InvokeAsync(aa);
-                Console.WriteLine(a.Response);
-            }
-
-            private async Task LogIn()
-            {
-
-                var options = new OidcClientOptions(
-                    //Authority: "",
-                    //clientId: "",
-                    //clienttSecret: "",
-                    //redirectURI: "",
-                );
-                //no constructor was available????
-                options.Authority = Authority;
-                options.ClientId = clientIdentity;
-                options.ClientSecret = clienttSecret;
-                options.RedirectUri = redirectURI;
-                options.Scope = scope;
-                options.Browser = loopbackBrowser;
-                options.FilterClaims = false;
-                options.LoadProfile = false;
-            }
-
-
+            /// <summary>
+            /// Generate a nounce "state" for comparison on callback to protect against MiTM attacks, however not required for loopback, still implemented.
+            /// </summary>
+            /// <returns></returns>
             private static string Generatestate() {
                 string chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
                 Random rand = new Random();
                 return new string(Enumerable.Repeat(chars, 32).Select(s => s[rand.Next(s.Length)]).ToArray());
             }
 
+            /// <summary>
+            /// Public exposed void to trigger start of OAuth process flow, Checks to see if port is open before trying to launch browser.
+            /// </summary>
+            /// <param name="loopbackPort">The port specificed in the Bot Application</param>
+            public void OpenbRowser(int loopbackPort) {
+                if (!VerifyPortAccessibility(loopbackPort)) {
+                    OpenBrowserOIDCSample(fullURI);
+                } else {
+                    Print($"Unable to start Authorization flow. Port {loopbackPort} is being used by another program.", 3);
+                    return;
+                }
+            }
+
+            /// <summary>
+            /// Open the Full URI to Ask user for Authenization of resources. Code from ODIC Sample Code on Github.
+            /// </summary>
+            /// <param name="url">Complete URI including endpoint, and GET queries.</param>
+            /// <exception cref="Exception"></exception>
+            private void OpenBrowserOIDCSample(string url)
+            {
+                try {
+                    Process.Start(url);
+                } catch {
+                    if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows)) {
+                        url = url.Replace("&", "^&");
+                        Process.Start(new ProcessStartInfo("cmd", $"/c start {url}") { CreateNoWindow = true });
+                    } else if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux)) {
+                        Process.Start("xdg-open", url);
+                    } else if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX)) {
+                        Process.Start("open", url);
+                    } else {
+                        throw new Exception("Unable to Launch System Browser.");
+                    }
+                }
+            }
+
+            public static bool VerifyPortAccessibility(int port)
+            {
+                try {
+                    Print($"Checking if port {port} is open", 0);
+                    using (TcpClient client = new TcpClient()) {
+                        /*client.Connect("127.0.0.1", port);
+                        client.Close();
+                        Print($"{port} is available", 0);
+                        return true;
+                    }*/
+                        IAsyncResult result = client.BeginConnect("127.0.0.1", port, null, null);
+                        bool success = result.AsyncWaitHandle.WaitOne(TimeSpan.FromSeconds(1));
+                        if(success) {
+                            client.EndConnect(result);
+                            client.Close();
+                            Print($"The port {port} is being used by another program", 3);
+                            return true;
+                        }
+                        client.Close();
+                        Print($"{port} is usable", 0);
+                        return false;
+                    }
+                } catch (SocketException ex) {
+                    if (ex.SocketErrorCode == SocketError.ConnectionRefused) {
+                        Print($"127.0.0.1:{port} was refused", 0);
+                        return false;
+                    }
+                    throw new Exception("op 0x9D: I really don't know");
+                } catch (Exception ex) {
+                    Print(ex.ToString(), 0);
+                    return false;
+                }
+            }
 
             /// <summary>
             /// This will return what we's previously called Apollo token that we took from our 2nd account. eh come back and clean this up
@@ -153,16 +216,14 @@ namespace ShimamuraBot
             /// <returns></returns>
             public async Task RequestToken(bool refreshRequestREEEEEEEE = false, CancellationToken cancellation = default)
             {
-                using(HttpClient client = new HttpClient())
-                {
+                using(HttpClient client = new HttpClient()) {
                     client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Basic", token.Basic);
                     client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
                     client.DefaultRequestHeaders.Add(token.CUSTARD_Header, state);
                     FormUrlEncodedContent postOptions;
                     string secretshitstoredsomewhereintheuniverse = "EEEEEEEEEEEEEEEHhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh"; //placeholder
 
-                    if (!refreshRequestREEEEEEEE)
-                    {
+                    if (!refreshRequestREEEEEEEE) {
                         postOptions = new FormUrlEncodedContent(new[]
                         {
                             new KeyValuePair<string, string>("grant_type", "authorization_code"),
@@ -186,11 +247,6 @@ namespace ShimamuraBot
             }
         }
 
-        public void TouchThings()
-        {
-            //var a = new OAuthClient("", "", "", "", "bot");
-        }
-
         /// <summary>
         /// Constructs messages to send to the API endpoint
         /// </summary>
@@ -206,8 +262,7 @@ namespace ShimamuraBot
 
             }
 
-            switch (command)
-            {
+            switch (command) {
                 case "connect":
                     //msg template
                     msg.Add(new { command = "", identifier = "{\"channel\":\"" + theChannel + "\"}" });
@@ -234,7 +289,6 @@ namespace ShimamuraBot
                     break;
                 default:
                     throw new Exception("An invalid call to MessageConstructor was passed.");
-                    break;
             }
 
             return msg;

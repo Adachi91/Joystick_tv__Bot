@@ -20,16 +20,64 @@ namespace ShimamuraBot
         //private static Uri testy = new Uri("wss://socketsbay.com/wss/v2/1/demo/");
         private static Uri Joystick = new Uri("wss://joystick.tv/cable?token=" + apolloSecret);
 
-        private static readonly ManualResetEvent ExitEvent = new ManualResetEvent(false);
+        //private static readonly ManualResetEvent ExitEvent = new ManualResetEvent(false);
+        //public static CancellationTokenSource ShutdownToken = new CancellationTokenSource();
 
-        //private static client wssClient = new client(Joystick, "actioncable-v1-json", true);
-        private static client wssClient = new client(Joystick, "shimamura", BotUUID, apolloSecret, "adachi91");
+        //private static client wssClient = new client(Joystick, "shimamura", BotUUID, apolloSecret, "adachi91");
+        //private bool mainThread = true;
 
-        private static bool running = true;
+        public static int LoopbackPort = 8087;
+
+        public class mainThread //we don't ask why I do shit like this, I just accep it.
+        {
+            private static bool isRunning { get; set; }
+            public static readonly ManualResetEvent ExitEvent = new ManualResetEvent(false);
+            public static CancellationTokenSource isExiting = new CancellationTokenSource();
+            private static bool MainLoopStarted { get; set; }
+
+            //I'm actually going to refactor this entire section it's going to call to MainLoop.acecssor/method
+
+            private static Dictionary<string, long> FiveMillionTimers = new Dictionary<string, long>();
+            //Dr. Evil air qouatation marks
+            private static Thread MainLoop = new Thread(() => {
+                //There are a lot of off-side threads running taskes such as tcp connections
+                //it's pretty frustrating but there is very little "off the shelf" event connection to HTTPListener and I'm assuming HTTPClient,
+                //though I do imagine HTTPClient will have SOME events to hook into and monitor, why is HTTPListener a little bitch? idk.
+
+                //Manage, Monitor, Handle different aspects of the program while waiting for user input
+
+                //I'm counting on you gohan, JK he's a little shit.
+            });
+
+
+            /// <summary>
+            /// Get state of the Main Thread
+            /// </summary>
+            /// <returns>bool</returns>
+            public static bool Running() { return isRunning; }
+            /// <summary>
+            /// Start Main Thread
+            /// </summary>
+            public static void Start() { isRunning = true; }
+            /// <summary>
+            /// Stop Main Thread
+            /// </summary>
+            public static void Stop() {  isRunning = false; }
+
+            public static bool thread2Running() { return MainLoopStarted; }
+            public static void startshit() { MainLoopStarted = true; }
+            public static void stopshit() { MainLoopStarted = false; }
+        }
+
        // private static Dictionary<int, string> consoleBuffer = new Dictionary<int, string>(100);
         private static List<string> consoleBuffer = new List<string>();
         private static int BufferSizeMax = 100;
-        private static TempServer server = new TempServer();
+        private static TempServer server;
+        private static events.OAuthClient oAuth = new events.OAuthClient(token.baseAPIURI, token.clientId, token.clientSecret, @"https://127.0.0.1:8087/auth", "bot");
+
+
+
+
         /// <summary>
         /// Renders the output display, YES I really spent all morning writing this and I feel horrible about it.
         /// </summary>
@@ -47,8 +95,8 @@ namespace ShimamuraBot
             Console.ForegroundColor = ConsoleColor.Cyan;
             Console.WriteLine(headerBorder);
             Console.Write($"=   Shimamura Bot {Assembly.GetExecutingAssembly().GetName().Version}  ##  Status: ");
-            Console.ForegroundColor = running == true ? ConsoleColor.Green : ConsoleColor.Red;
-            Console.Write("{0}", running == true ? "Online" : "Offline");
+            Console.ForegroundColor = mainThread.Running() == true ? ConsoleColor.Green : ConsoleColor.Red;
+            Console.Write("{0}", mainThread.Running() == true ? "Online" : "Offline");
             Console.WriteLine("");
             Console.ForegroundColor = ConsoleColor.Cyan;
             Console.WriteLine(headerBorder);
@@ -86,6 +134,8 @@ namespace ShimamuraBot
         {
             AppDomain.CurrentDomain.ProcessExit += CurrentDomainOnProcessExit;
             Console.CancelKeyPress += ConsoleOnCancelKeyPress;
+            if (!mainThread.Running()) mainThread.Start();
+            mainThread.startshit();
 
             Console.ForegroundColor = ConsoleColor.Cyan;
             string headerBorder = new string('=', Console.WindowWidth);
@@ -102,33 +152,54 @@ namespace ShimamuraBot
 
             Console.Write("> ");
 
-            while (running) {
+            Thread meow = new Thread(() => {
+                while (mainThread.thread2Running())
+                {
+                    DateTimeOffset dateTimeOffset = DateTimeOffset.UtcNow;
+                    long unixTimestampMilliseconds = dateTimeOffset.ToUnixTimeMilliseconds();
+                    Console.WriteLine($"Test {unixTimestampMilliseconds}");
+
+                    Thread.Sleep(420);
+                }
+            });
+            meow.Start();
+            //dual threaded or single threaded for main loop? I don't fucking know the console input is basically locked waiting for user input
+            //so it can't do background taskes so I think I need a true mainloop
+
+            while (mainThread.Running()) {
                 string input = Console.ReadLine();
 
-                switch(input)
+                switch (input)
                 {
                     case "exit" or "quit" or "stop":
-                        running = false;
+                        //running = false;
+                        mainThread.Stop();
                         break;
-                    case "oauth":
-                        //TODO: create class and test OAuth on playground.
+                    case "start" or "run":
+                        events.Print($"The circle is complete bitch, {oAuth.code.Substring(4, 10)}", 0);
+                        //check if we have a valid token or refreshable token, do complete OAuth flow.
                         break;
                     case "config":
+                        events.Print("Idk", 4);
                         //TODO: settings
                         break;
                     case "fun":
+                        mainThread.stopshit();
                         //TODO: Setup things like YT, soundcloud, vemo video play commands, and other stuff
                         break;
-                    case "sendit":
-                        events stateful = new events(token.username, BotUUID, "", "");
-                        events.OAuthClient oAuth = new events.OAuthClient("", "", "","","bot");
-                        oAuth.SendA();
+                    case "sendit" or "oauth":
+                        //events stateful = new events(token.username, BotUUID, "", "");
+                        oAuth.OpenbRowser(8087);
                         break;
                     case "listen":
-                        server.StartAsync();
+                        server = new TempServer(oAuth);
+                        //server.StartAsync(oAuth);
                         break;
                     case "stoplisten":
                         server.Stop();
+                        break;
+                    case "fuckmylife":
+                        events.OAuthClient.VerifyPortAccessibility(LoopbackPort);
                         break;
                     default:
                         Console.WriteLine("type help");
@@ -137,39 +208,6 @@ namespace ShimamuraBot
 
                 Console.Write("> ");
             }
-
-            return;
-
-
-            Console.WriteLine("|=======================|");
-            Console.WriteLine("|    WEBSOCKET CLIENT   |");
-            Console.WriteLine("|=======================|");
-            Console.WriteLine();
-
-
-
-            Console.WriteLine("====================================");
-            Console.WriteLine("              ShimamuraBot          ");
-            Console.WriteLine("              Version {0}           ", Assembly.GetExecutingAssembly().ImageRuntimeVersion);
-            Console.WriteLine("====================================");
-            Console.SetCursorPosition(0, Console.WindowHeight - 1);
-
-            /************************************************************************************************************************
-             * Gather around boys and girls while I try and learn OAuth flow. What? I like being behind the curve.
-             ************************************************************************************************************************/
-
-            Console.Write(">");
-            while (running)
-            {
-                var txt = Console.ReadLine();
-
-                switch(txt.ToLower())
-                {
-                    case "exit" or "pizza":
-                        running = false;
-                        break;
-                }
-
                 
                 //I was euuuuuuhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh (-drake) testing out a switch feature I didn't know existed.
                 /*var resultText = txt switch
@@ -178,13 +216,10 @@ namespace ShimamuraBot
                     "exit" => "ZERO ZERO TWO BEST GIRL",
                     _ => "Shit"
                 };*/
-            }
-
-            Console.WriteLine("Goodbye !");
 
             return;
 
-            var socket = ConstructCable().Result;
+            /*var socket = ConstructCable().Result;
             while(socket._connected)
             {
                 var input = Console.ReadLine();
@@ -199,33 +234,37 @@ namespace ShimamuraBot
                         Task.Run(() => wssClient.Subscribe("connect", true));
                         break;
                 }
-            }
-            
-            Console.WriteLine("====================================");
-            Console.WriteLine("              STOPPING              ");
-            Console.WriteLine("====================================");
+            }*/
         }
 
-        static async Task<client> ConstructCable()
+        /*static async Task<client> ConstructCable()
         {
             await wssClient.Connect();
             Console.WriteLine("Main Thread: Connection: {0}", wssClient._connected);
-            //await wssClient.Subscribe("connect");
             Task.Run(() => wssClient.Listen());
             return wssClient;
+        }*/
+
+        private static async Task<bool> WaitForClosures()
+        {//to even start I need to have a pool of resources to check list down to make sure are closed and disposed or at least gracefully closed.
+
+            return true;
         }
 
-        private static void CurrentDomainOnProcessExit(object sender, EventArgs eventArgs)
+        private static async void CurrentDomainOnProcessExit(object sender, EventArgs eventArgs)
         {
-            Console.WriteLine("Exiting process");
-            ExitEvent.Set();
+            Console.WriteLine("Exiting process...");
+
+            //var stopped = await Task.Run(() => WaitForClosure());
+            //ExitEvent.Set();
+            mainThread.ExitEvent.Set();
         }
 
         private static void ConsoleOnCancelKeyPress(object sender, ConsoleCancelEventArgs e)
         {
-            Console.WriteLine("Canceling process");
+            Console.WriteLine("Canceling process...");
             e.Cancel = true;
-            ExitEvent.Set();
+            mainThread.ExitEvent.Set();
         }
     }
 }

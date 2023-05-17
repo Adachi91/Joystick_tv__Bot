@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Collections.Specialized;
+using System.IO;
 using System.Linq;
 using System.Net;
 using System.Text;
@@ -11,98 +12,92 @@ namespace ShimamuraBot
     internal class TempServer
     {
         private readonly HttpListener listener;
+        private bool stopReuqest { get; set; } = false;
+        private void Print(string msg, int lvl) => events.Print(msg, lvl);
 
-        public TempServer()
-        {
+        /// <summary>
+        /// Construct and start listening on localhost:port for incoming OAuth redirects
+        /// </summary>
+        public TempServer(events.OAuthClient OAuthPtr) {
+            if (!events.OAuthClient.VerifyPortAccessibility(Program.LoopbackPort)) {
+                Task.Run(() => StartAsync(OAuthPtr));
+            } else {
+                Print($"Unable to start Authorization flow. Port {Program.LoopbackPort} is being used by another program,,", 3);
+                return;
+            }
+
             listener = new HttpListener();
             listener.Prefixes.Add("http://127.0.0.1:8087/");
         }
 
-        public async Task StartAsync()
+        /// <summary>
+        /// Loopback listener, Main Thread -> Listener -> Data -> StopListening -> Send Main Thread.InstanceEvents
+        /// </summary>
+        /// <param name="OAuthPtr">Pointer to Constructed OAuth Class</param>
+        /// <returns></returns>
+        public async Task StartAsync(events.OAuthClient OAuthPtr)
         {
             listener.Start();
-            Console.WriteLine("HTTP listener started on http://127.0.0.1:8087/");
-
-            while (true) {
+            Print("HTTPListener started on http://127.0.0.1:8087/auth/", 1);
+            
+            while (listener.IsListening) {
                 try {
                     var context = await listener.GetContextAsync();
-
-                    // Read the request body
                     var request = context.Request;
-                    var requestBody = new StringBuilder();
-                    using (var stream = request.InputStream)
-                    {
+                    /*var requestBody = new StringBuilder();
+                    using (var stream = request.InputStream) {
                         byte[] buffer = new byte[request.ContentLength64];
                         int bytesRead = 0;
-                        while ((bytesRead = stream.Read(buffer, 0, buffer.Length)) > 0)
-                        {
+                        while ((bytesRead = stream.Read(buffer, 0, buffer.Length)) > 0) {
                             requestBody.Append(Encoding.UTF8.GetString(buffer, 0, bytesRead));
                         }
-                    }
-
-                    // Print the request body to the console
-                    if (!string.IsNullOrEmpty(requestBody.ToString()))
-                        Console.WriteLine("[HTTP Listener]: " + requestBody.ToString());
-                    else
-                        Console.WriteLine("[HTTP Listener]: No body was sent back.");
-
-                    // Display the URL used by the client.
-                    Console.WriteLine("URL: {0}", request.Url.OriginalString);
-                    Console.WriteLine("Raw URL: {0}", request.RawUrl);
-                    Console.WriteLine("Query: {0}", request.QueryString);
-
-                    // Display the referring URI.
-                    Console.WriteLine("Referred by: {0}", request.UrlReferrer);
-
-                    //Display the HTTP method.
-                    Console.WriteLine("HTTP Method: {0}", request.HttpMethod);
-                    //Display the host information specified by the client;
-                    Console.WriteLine("Host name: {0}", request.UserHostName);
-                    Console.WriteLine("Host address: {0}", request.UserHostAddress);
-                    Console.WriteLine("User agent: {0}", request.UserAgent);
-
-                    /*NameValueCollection aaa = new NameValueCollection(request.QueryString);
-
-                    foreach(var a in aaa)
-                    {
-                        Console.WriteLine($"This was in aaa :: {a.ToString()}");
-                    }
-
-                    if (aaa.AllKeys.Contains("code"))
-                    {
-                        Console.WriteLine("CODE WAS FOUND attempting extraction...");
-                        
-                        for(int i = 0; i < aaa.Count; i++)
-                        {
-                            if(aaa.Keys.Get(i).ToString() == "code")
-                            {
-                                var b = aaa.GetValues(i);
-                                Console.WriteLine(b.ToString());
-                            }
-                        }
-                    } else
-                    {
-                        Console.WriteLine("aaa.allkeys.contains failed");
                     }*/
+                    var requestBody = await new StreamReader(request.InputStream).ReadToEndAsync();
 
-                    // Send a response
-                    var response = context.Response;    
+                    if(!listener.IsListening) context.Response.Abort(); //monkey patching
+                    if (!string.IsNullOrEmpty(request.QueryString["state"]))
+                        if (request.QueryString["state"] == OAuthPtr.state)
+                            if (!string.IsNullOrEmpty(request.QueryString["code"]))
+                                OAuthPtr.code = request.QueryString["code"];
+                            else
+                                Print("Unable to retrieve code for OAuth flow", 3);
+                        else
+                            Print("The return state of the Authority was a mismatch or invalid", 3);
+
+                    var response = context.Response;
                     response.ContentType = "text/html";
                     var responseBytes = Encoding.UTF8.GetBytes("<!DOCTYPE html><html lang=\"en\"><head><title>Authorization Successful</title><style>html,body{background-color:#1c1b22;color:#fff;} h1 {margin:auto; text-align:center; padding-top:5rem;}</style></head><body><h1>Request was Successful. You may close this page now.</h1></body></html>");
                     response.OutputStream.Write(responseBytes, 0, responseBytes.Length);
                     response.Close();
-                }
-                catch (Exception ex)
-                {
-                    Console.WriteLine("[HTTP Listener Error]: " + ex.Message);
+                    if(response.StatusCode == 200) {
+                        stopReuqest = true;
+                        break;
+                    }
+                } catch (HttpListenerException ex) {
+                    if(ex.ErrorCode == 995 && stopReuqest)
+                    {
+                        //everything is fine, this is fine, the fire is fine.
+                        return;
+                    }
+                    Print($"There was an unexpected error in HTTPListener :: {ex}", 3);
                 }
             }
+            listener.Stop();
+            Task.Delay(1000).Wait();
+            if (listener.IsListening)
+                Print($"THE FUCKING WORLD IS DOOMED", 4);
         }
 
-        public void Stop()
-        {
-            listener.Stop();
-            Console.WriteLine("HTTP listener stopped");
+        /// <summary>
+        /// May cause anal leakage, computer fires, house fires, campfires, orgies, your results may vary.
+        /// </summary>
+        public void Stop() {
+            if (listener.IsListening) {
+                listener.Stop();
+                Task.Delay(1000).Wait();
+            } else {
+                Print("Listener has finally been murdered, it's fucking dead, we did it crew, holy shit. That's a boss battle for ya.", 2);
+            }
         }
     }
 }

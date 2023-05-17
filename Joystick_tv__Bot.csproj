@@ -32,12 +32,4 @@
     <Folder Include="vendor\" />
   </ItemGroup>
 
-  <ItemGroup>
-    <PackageReference Include="identitymodel" Version="6.1.0" />
-    <PackageReference Include="IdentityModel.OidcClient" Version="5.2.1" />
-    <PackageReference Include="microsoft.aspnetcore" Version="2.2.0" />
-    <PackageReference Include="microsoft.aspnetcore.hosting" Version="2.2.7" />
-    <PackageReference Include="microsoft.aspnetcore.http" Version="2.2.2" />
-  </ItemGroup>
-
 </Project>
