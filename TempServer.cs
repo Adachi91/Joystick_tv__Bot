@@ -111,6 +111,7 @@ namespace ShimamuraBot
                 } catch (HttpListenerException ex) {
                     if(ex.ErrorCode == 995 && stopReuqest) {
                         //everything is fine, this is fine, the fire is fine.
+                        Print($"TempServer Shutdown after succesful authiorzation", 1);
                         return;
                     }
                     ListenerStarted = false;
