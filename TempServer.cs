@@ -4,7 +4,9 @@ using System.Collections.Specialized;
 using System.IO;
 using System.Linq;
 using System.Net;
+using System.Runtime.InteropServices;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace ShimamuraBot
@@ -13,19 +15,52 @@ namespace ShimamuraBot
     {
         private readonly HttpListener listener;
         private bool stopReuqest { get; set; } = false;
+        private bool ListenerStarted { get; set; } = false;
         private void Print(string msg, int lvl) => events.Print(msg, lvl);
+        private events.OAuthClient _OAuthPtr;
 
         /// <summary>
         /// Construct and start listening on localhost:port for incoming OAuth redirects
         /// </summary>
         public TempServer(events.OAuthClient OAuthPtr) {
-            if (!events.OAuthClient.VerifyPortAccessibility(Program.LoopbackPort)) {
                 listener = new HttpListener();
                 listener.Prefixes.Add($"http://127.0.0.1:{Program.LoopbackPort}/auth/");
+                _OAuthPtr = OAuthPtr;
+                //Task.Run(() => StartAsync(OAuthPtr));
+            //} else
+                //Print($"Unable to start Authorization flow. Port {Program.LoopbackPort} is being used by another program,,", 3);
+        }
 
-                Task.Run(() => StartAsync(OAuthPtr));
-            } else
-                Print($"Unable to start Authorization flow. Port {Program.LoopbackPort} is being used by another program,,", 3);
+        public async Task<bool> Start() {
+            //var PortUsed = await PortCheck();
+
+            if (!await PortCheck())
+                Task.Run(() => StartAsync(_OAuthPtr));
+
+
+            /*
+             * 
+             * check if the port there
+             * done
+             * start thingy
+             * done
+             * return
+             * done
+             * bye
+             */
+
+            while(!ListenerStarted) {
+                if(listener.IsListening)
+                    break;
+                
+                Thread.Sleep(10);
+            }
+            return true;
+        }
+
+        private async Task<bool> PortCheck()
+        {
+            return events.OAuthClient.VerifyPortAccessibility(Program.LoopbackPort);
         }
 
         /// <summary>
@@ -42,6 +77,7 @@ namespace ShimamuraBot
                 try {
                     var context = await listener.GetContextAsync();
                     var request = context.Request;
+                    ListenerStarted = true;
                     /*var requestBody = new StringBuilder();
                     using (var stream = request.InputStream) {
                         byte[] buffer = new byte[request.ContentLength64];
@@ -68,6 +104,7 @@ namespace ShimamuraBot
                     response.Close();
                     if(response.StatusCode == 200) {
                         stopReuqest = true;
+                        ListenerStarted = false;
                         listener.Stop();
                         Task.Delay(1000).Wait();
                     }
@@ -76,9 +113,11 @@ namespace ShimamuraBot
                         //everything is fine, this is fine, the fire is fine.
                         return;
                     }
+                    ListenerStarted = false;
                     Print($"Unexpected error in TempServer (!995): {ex}", 3);
                 } catch (Exception ex)
                 {
+                    ListenerStarted = false;
                     Print($"Unexpected Error in TempServer (Unknown): {ex}", 3);
                 }
             }
@@ -90,6 +129,7 @@ namespace ShimamuraBot
         public void Stop() {
             if (listener.IsListening) {
                 stopReuqest = true;
+                ListenerStarted = false;
                 listener.Stop();
                 Task.Delay(1000).Wait();
             } else

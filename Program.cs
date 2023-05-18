@@ -6,6 +6,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Collections.Generic;
 using System.Linq;
+using System.Security.Cryptography.X509Certificates;
 
 namespace ShimamuraBot
 {
@@ -27,9 +28,9 @@ namespace ShimamuraBot
         private void Print(string msg, int lvl) => events.Print(msg, lvl);
         public class MainThread //we don't ask why I do shit like this, I just accep it.
         {
-            public static readonly ManualResetEvent ExitEvent = new ManualResetEvent(false);
-            public static CancellationTokenSource isExiting = new CancellationTokenSource();
-            private static bool Started { get; set; }
+            public readonly ManualResetEvent ExitEvent = new ManualResetEvent(false);
+            public CancellationTokenSource isExiting = new CancellationTokenSource();
+            private bool Started { get; set; }
 
             public bool Running() { return Started; }
             public void Run() { Started = true; }
@@ -38,9 +39,21 @@ namespace ShimamuraBot
 
             //I'm actually going to refactor this entire section it's going to call to MainLoop.acecssor/method
 
-            private static Dictionary<string, long> FiveMillionTimers = new Dictionary<string, long>();
+            public static Dictionary<string, long> FiveMillionTimers = new Dictionary<string, long>();
             //Dr. Evil air qouatation marks
-            private static Thread MainLoop = new Thread(() => {
+            //Timer mytimer = new Timer(myTimeTicker);
+
+            public MainThread()
+            {
+                //MainLoop.Start();
+            }
+
+            //mainloop shit below this line turn back you don't want to die by reading what's below.
+            private static TempServer server;
+            public void Start() { MainLoop.Start(); }
+            public void Touchy() { server.Stop(); }
+
+            private Thread MainLoop = new Thread(async () => {
                 //There are a lot of off-side threads running taskes such as tcp connections
                 //it's pretty frustrating but there is very little "off the shelf" event connection to HTTPListener and I'm assuming HTTPClient,
                 //though I do imagine HTTPClient will have SOME events to hook into and monitor, why is HTTPListener a little bitch? idk.
@@ -48,18 +61,42 @@ namespace ShimamuraBot
                 //Manage, Monitor, Handle different aspects of the program while waiting for user input
 
                 //I'm counting on you gohan, JK he's a little shit.
+
+                FiveMillionTimers.Add("Apples", 023985723985);
+
+                server = new TempServer(oAuth);
+                var asdf = await server.Start();
+                events.Print($"Server should have started thingy {asdf}", 0);
+
+                /*if(((ct - cl) % 10) >= 0) //GOOOOOOOOOOOOOOOOOO
+
+                if(((11 - 10) % 100) >= 0) //GOOOOOOOOOOOOOOOOOO
+
+                if(((11 - 10) % 20) >= 0) //GOOOOOOOOOOOOOOOOOO
+
+                if(((11 - 10) % 10) >= 0) //GOOOOOOOOOOOOOOOOOO
+
+                if(((11 - 10) % 10) >= 0) //GOOOOOOOOOOOOOOOOOO
+
+                if(((11 - 10) % 10) >= 0) //GOOOOOOOOOOOOOOOOOO
+
+                if(((11 - 10) % 10) >= 0)*/ //GOOOOOOOOOOOOOOOOOO
+
+                //shutdownreceive
+
             });
         }
 
         private static TempServer server;
         private static events.OAuthClient oAuth = new events.OAuthClient(token.baseAPIURI, token.clientId, token.clientSecret, @"https://127.0.0.1:8087/auth", "bot");
-
+        public static MainThread MainLoop = new MainThread();
         static void Main(string[] args)
         {
             AppDomain.CurrentDomain.ProcessExit += CurrentDomainOnProcessExit;
             Console.CancelKeyPress += ConsoleOnCancelKeyPress;
-            if (!mainThread.Running()) mainThread.Start();
-            mainThread.startshit();
+
+
+            if (!MainLoop.Running()) MainLoop.Run();
 
             Console.ForegroundColor = ConsoleColor.Cyan;
             string headerBorder = new string('=', Console.WindowWidth);
@@ -72,11 +109,12 @@ namespace ShimamuraBot
             Console.Write("===");
             Console.SetCursorPosition(0, 2);
             Console.WriteLine(headerBorder);
+            Console.SetCursorPosition(1, 4);
             Console.ForegroundColor = ConsoleColor.White;
 
-            Console.Write("> ");
+            //Console.Write("> ");
 
-            Thread meow = new Thread(() => {
+            /*Thread meow = new Thread(() => {
                 while (mainThread.thread2Running())
                 {
                     DateTimeOffset dateTimeOffset = DateTimeOffset.UtcNow;
@@ -86,16 +124,18 @@ namespace ShimamuraBot
                     Thread.Sleep(420);
                 }
             });
-            meow.Start();
+            meow.Start();*/
 
-            while (mainThread.Running()) {
+            Console.WriteLine("Type help for commands, or start to start the applications.exe");
+
+            while (MainLoop.Running()) {
                 string input = Console.ReadLine();
 
                 switch (input)
                 {
                     case "exit" or "quit" or "stop":
                         //running = false;
-                        mainThread.Stop();
+                        MainLoop.Stop();
                         break;
                     case "start" or "run":
                         events.Print($"The circle is complete bitch, {oAuth.code.Substring(4, 10)}", 0);
@@ -106,7 +146,10 @@ namespace ShimamuraBot
                         //TODO: settings
                         break;
                     case "fun":
-                        mainThread.stopshit();
+                        //foreach (var fuckyou in MainThread.FiveMillionTimers)
+                        //Console.WriteLine($"fuckyou.key {fuckyou.Key} and fuckyou.value {fuckyou.Value}");
+                        MainLoop.Start();
+                        //Console.WriteLine($"Result of Millionsooftimerthing is {MainThread.FiveMillionTimers}");
                         //TODO: Setup things like YT, soundcloud, vemo video play commands, and other stuff
                         break;
                     case "sendit" or "oauth":
@@ -115,20 +158,30 @@ namespace ShimamuraBot
                         break;
                     case "listen":
                         server = new TempServer(oAuth);
-                        //server.StartAsync(oAuth);
+                        //var asdf = await server.Start();
+                        //events.Print($"Server should have started thingy {asdf}", 0);
+                        ////server.StartAsync(oAuth);
                         break;
                     case "stoplisten":
-                        server.Stop();
+                        MainLoop.Touchy();
+                        //server.Stop();
                         break;
                     case "fuckmylife":
-                        events.OAuthClient.VerifyPortAccessibility(LoopbackPort);
+                        //events.OAuthClient.VerifyPortAccessibility(LoopbackPort);
+                        break;
+                    case "help":
+                        events.Print($"help - IT DISPLAYS THIS FUCKING MESSAGE", 1);
+                        events.Print($"listen - STARTS LISTENING ON THE TEMPORARY FUCKING SERVER OF HTTPLISTENER", 1);
+                        events.Print($"stoplisten - STOP THE STUPID FUCKING HTTPLISTENER", 1);   
+                        events.Print($"fun - IDK MASTURBATE?", 1);
+                        events.Print($"quit/exit/something - IT EXPLODES", 1);
                         break;
                     default:
-                        Console.WriteLine("type help");
+                        events.Print("type help", 1);
                         break;
                 }
 
-                Console.Write("> ");
+                //Console.Write("> ");
             }
                 
                 //I was euuuuuuhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh (-drake) testing out a switch feature I didn't know existed.
@@ -179,14 +232,14 @@ namespace ShimamuraBot
 
             //var stopped = await Task.Run(() => WaitForClosure());
             //ExitEvent.Set();
-            mainThread.ExitEvent.Set();
+            MainLoop.ExitEvent.Set();
         }
 
         private static void ConsoleOnCancelKeyPress(object sender, ConsoleCancelEventArgs e)
         {
             Console.WriteLine("Canceling process...");
             e.Cancel = true;
-            mainThread.ExitEvent.Set();
+            MainLoop.ExitEvent.Set();
         }
     }
 }

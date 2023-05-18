@@ -62,9 +62,9 @@ namespace ShimamuraBot
             ConsoleColor debug = ConsoleColor.Cyan;
             ConsoleColor warn = ConsoleColor.Yellow;
             ConsoleColor error = ConsoleColor.Red;
+            Console.SetCursorPosition(1, Console.CursorTop);
 
-
-            switch(level) {
+            switch (level) {
                 case 0: Console.ForegroundColor = debug; Console.Write("[Debug]:"); Console.ForegroundColor = current; Console.Write($" {text}\r\n");
                     break;
                 case 1: Console.WriteLine($"[System]: {text}");
