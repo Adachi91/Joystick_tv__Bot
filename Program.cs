@@ -24,13 +24,16 @@ namespace ShimamuraBot
 
         //private static client wssClient = new client("wxx://FQDN/APIEndPoint?Token=Token", "shimamura", BotUUID, apolloSecret, "adachi91");
 
+        //TODO: This needs a cfg file for UUIDs / port / etc
         public static int LoopbackPort = 8087;
         private void Print(string msg, int lvl) => events.Print(msg, lvl);
-        public class MainThread //we don't ask why I do shit like this, I just accep it.
+
+        //TODO: Refactor this entire fucking piece of shit
+        public class MainThread
         {
             public readonly ManualResetEvent ExitEvent = new ManualResetEvent(false);
             public CancellationTokenSource isExiting = new CancellationTokenSource();
-            private bool Started { get; set; }
+            private bool Started { get; set; } = false;
 
             public bool Running() { return Started; }
             public void Run() { Started = true; }
@@ -46,27 +49,30 @@ namespace ShimamuraBot
             public MainThread()
             {
                 //MainLoop.Start();
+                //Remember to Thread.join() Jackass. 2024
             }
 
             //mainloop shit below this line turn back you don't want to die by reading what's below.
-            private static TempServer server;
+            private static HTTPServer server;
             public void Start() { MainLoop.Start(); }
             public void Touchy() { server.Stop(); }
 
-            private Thread MainLoop = new Thread(async () => {
+            private Thread MainLoop = new Thread((object obj) => { //DOES THIS SHIT EVEN EXECUTE?!?!?
                 //There are a lot of off-side threads running taskes such as tcp connections
                 //it's pretty frustrating but there is very little "off the shelf" event connection to HTTPListener and I'm assuming HTTPClient,
                 //though I do imagine HTTPClient will have SOME events to hook into and monitor, why is HTTPListener a little bitch? idk.
 
                 //Manage, Monitor, Handle different aspects of the program while waiting for user input
 
-                //I'm counting on you gohan, JK he's a little shit.
-
                 FiveMillionTimers.Add("Apples", 023985723985);
 
-                server = new TempServer(oAuth);
-                var asdf = await server.Start();
-                events.Print($"Server should have started thingy {asdf}", 0);
+                /*
+                 * init -> Thread.MainLoop(obj).Start() -> OAuth instance(ML) -> HTTPServer start(ML) -> OH that's what client does I think.
+                 */
+
+                server = new HTTPServer(oAuth);
+                server.Start();
+                //events.Print($"Server should have started thingy {asdf}", 0);
 
                 /*if(((ct - cl) % 10) >= 0) //GOOOOOOOOOOOOOOOOOO
 
@@ -87,8 +93,9 @@ namespace ShimamuraBot
             });
         }
 
-        private static TempServer server;
         private static events.OAuthClient oAuth = new events.OAuthClient(token.baseAPIURI, token.clientId, token.clientSecret, @"https://127.0.0.1:8087/auth", "bot");
+        private static HTTPServer server = new HTTPServer(oAuth);
+        private static VNyan vCat = new VNyan();
         public static MainThread MainLoop = new MainThread();
         static void Main(string[] args)
         {
@@ -112,26 +119,13 @@ namespace ShimamuraBot
             Console.SetCursorPosition(1, 4);
             Console.ForegroundColor = ConsoleColor.White;
 
-            //Console.Write("> ");
-
-            /*Thread meow = new Thread(() => {
-                while (mainThread.thread2Running())
-                {
-                    DateTimeOffset dateTimeOffset = DateTimeOffset.UtcNow;
-                    long unixTimestampMilliseconds = dateTimeOffset.ToUnixTimeMilliseconds();
-                    Console.WriteLine($"Test {unixTimestampMilliseconds}");
-
-                    Thread.Sleep(420);
-                }
-            });
-            meow.Start();*/
-
-            Console.WriteLine("Type help for commands, or start to start the applications.exe");
+            Console.WriteLine("Type \"Help\" for commands, or \"Start\" to start the bot");
 
             while (MainLoop.Running()) {
+                Console.Write(">");
                 string input = Console.ReadLine();
 
-                switch (input)
+                switch (input.ToLower())
                 {
                     case "exit" or "quit" or "stop":
                         //running = false;
@@ -153,21 +147,25 @@ namespace ShimamuraBot
                         //TODO: Setup things like YT, soundcloud, vemo video play commands, and other stuff
                         break;
                     case "sendit" or "oauth":
-                        //events stateful = new events(token.username, BotUUID, "", "");
-                        oAuth.OpenbRowser(8087);
+                        //oAuth.OpenbRowser(8087);
+                        server.openBrowser(oAuth.fullURI);
                         break;
                     case "listen":
-                        server = new TempServer(oAuth);
-                        //var asdf = await server.Start();
-                        //events.Print($"Server should have started thingy {asdf}", 0);
+                        //server = new HTTPServer(oAuth);
+                        server.Start();
+                        ///events.Print($"Server should have started thingy {asdf}", 0);
                         ////server.StartAsync(oAuth);
                         break;
                     case "stoplisten":
-                        MainLoop.Touchy();
-                        //server.Stop();
+                        //MainLoop.Touchy(); //why are you like this
+                        server.Stop();
                         break;
                     case "fuckmylife":
                         //events.OAuthClient.VerifyPortAccessibility(LoopbackPort);
+                        vCat.Redeem("Testa");
+                        break;
+                    case "vcat":
+                        vCat.Redeem("meow");
                         break;
                     case "help":
                         events.Print($"help - IT DISPLAYS THIS FUCKING MESSAGE", 1);
@@ -191,34 +189,7 @@ namespace ShimamuraBot
                     "exit" => "ZERO ZERO TWO BEST GIRL",
                     _ => "Shit"
                 };*/
-
-            return;
-
-            /*var socket = ConstructCable().Result;
-            while(socket._connected)
-            {
-                var input = Console.ReadLine();
-                switch(input.ToLower())
-                {
-                    case "exit":
-                        Task.Run(() => wssClient.Unsubscribe("disconnect", false)).Wait();
-                        Console.WriteLine("|_./");
-                        socket.Disconnect().Wait();
-                        break;
-                    case "sendit":
-                        Task.Run(() => wssClient.Subscribe("connect", true));
-                        break;
-                }
-            }*/
         }
-
-        /*static async Task<client> ConstructCable()
-        {
-            await wssClient.Connect();
-            Console.WriteLine("Main Thread: Connection: {0}", wssClient._connected);
-            Task.Run(() => wssClient.Listen());
-            return wssClient;
-        }*/
 
         private static async Task<bool> WaitForClosures()
         {//to even start I need to have a pool of resources to check list down to make sure are closed and disposed or at least gracefully closed.

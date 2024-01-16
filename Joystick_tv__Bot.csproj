@@ -3,7 +3,7 @@
   <PropertyGroup>
     <OutputType>Exe</OutputType>
     <TargetFramework>net6.0</TargetFramework>
-    <SignAssembly>true</SignAssembly>
+    <SignAssembly>False</SignAssembly>
     <AssemblyOriginatorKeyFile>AdachiSig.pfx</AssemblyOriginatorKeyFile>
     <DelaySign>false</DelaySign>
     <StartupObject></StartupObject>
