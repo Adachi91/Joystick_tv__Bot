@@ -10,6 +10,8 @@ using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Net.Http;
+using System.Net.Http.Headers;
 
 namespace ShimamuraBot
 {
@@ -36,6 +38,39 @@ namespace ShimamuraBot
             //} else
                 //Print($"Unable to start Authorization flow. Port {Program.LoopbackPort} is being used by another program,,", 3);
         }
+
+
+        /// <summary>
+        ///  Post to Joystick's API gateway and request a JWT
+        /// </summary>
+        /// <param name="type">Type of grant. 1:Request, 2:Renew</param>
+        public async void callmewhateverlater(int type)
+        {
+            //Can I please get WebClient back ; _ ;
+
+            //already on 2nd attemtpts
+            
+
+            using(HttpClient hc = new HttpClient()) {
+                //oh boy here we go again
+                //First attempt
+
+                //over / under on it exploding?
+                using (var postMessage = new HttpRequestMessage(HttpMethod.Post, new Uri(_OAuthPtr.fullURI + $"redirect_uri=unused&code={_OAuthPtr.code}&grant_type=" + (type == 1 ? "authorization_code" : "refresh_token"))))
+                { //I really don't but I really do
+                    postMessage.Headers.Authorization = new AuthenticationHeaderValue("bearer", _OAuthPtr.basicAuth);
+                    postMessage.Headers.Add("Content-Type", "application/json");
+                    postMessage.Headers.Add(_OAuthPtr.header, _OAuthPtr.state);
+                    //wait what was I doing? I need to switch types
+                    var aaaaaaa = await hc.SendAsync(postMessage);
+
+                    
+                    //need that token manager now, got any of those tokens for managing?
+                }
+            }
+        }
+
+
 
         public async Task<bool> Start() {
             if (!await PortCheck())

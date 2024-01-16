@@ -109,6 +109,44 @@ namespace ShimamuraBot
         }
         #endregion
 
+        public static class TokenManager
+        { //EVERYBODY GETS ACCESS OMG
+            public static string Token;
+            public static string refreshToken;
+            public static string state;
+            public static int expiry;
+
+
+            /*public TokenManager(string _token, int _expiry, string _refresh, string _state) {
+                Token = _token;
+                refreshToken = _refresh;
+                state = _state;
+                expiry = _expiry;
+            }*/
+
+            public static void UpdateValues(string _token, int _expiry, string _refresh, string _state)
+            {
+                if (_state != state && !string.IsNullOrEmpty(state)) throw new Exception("states do not match");
+                if (string.IsNullOrEmpty(state)) state = _state;
+
+                Token = _token;
+                refreshToken = _refresh;
+                expiry = _expiry;
+            }
+
+            public static void CheckExpiry()
+            {
+                //is this dog?
+            }
+
+            //Load between sessions
+            public static void LoadLocal(string ZeroZeroTwo)
+            {
+                //eh fuck it store it in a txt file named supersecret.txt
+
+            }
+        }
+
         public class OAuthClient
         {
             private readonly string Authority;
@@ -117,6 +155,8 @@ namespace ShimamuraBot
             private readonly string clientIdentity;
             private readonly string clienttSecret;
             public readonly string state;
+            public readonly string basicAuth;
+            public readonly string header;
             public string fullURI { get; set; }
             public string code;
             /*
@@ -139,13 +179,17 @@ namespace ShimamuraBot
             /// <param name="_clientidentity">Client Identifaction</param>
             /// <param name="_clientseret">Client Secret, will be used for Basic</param>
             /// <param name="_redirectURI">RedirectURI, should be 127.0.0.1:port because this is meant to only be a loopback</param>
+            /// <param name="_basic">The Basic auth key</param>
+            /// <param name="_header">Custom Header to add to request</param>
             /// <param name="_scope">Optional - Scope for if it's changed in the future</param>
-            public OAuthClient(string _authority, string _clientidentity, string _clientseret, string _redirectURI, string _scope = null)
+            public OAuthClient(string _authority, string _clientidentity, string _clientseret, string _redirectURI, string _basic, string _header, string _scope = null)
             {
                 Authority = _authority;
                 clientIdentity = _clientidentity;
                 clienttSecret = _clientseret;
                 redirectURI = _redirectURI;
+                basicAuth = _basic;
+                header = _header;
                 scope = _scope ?? "ALLURBASES";
 
                 state = Generatestate();

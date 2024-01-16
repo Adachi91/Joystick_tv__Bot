@@ -67,7 +67,9 @@ namespace ShimamuraBot
                 FiveMillionTimers.Add("Apples", 023985723985);
 
                 /*
-                 * init -> Thread.MainLoop(obj).Start() -> OAuth instance(ML) -> HTTPServer start(ML) -> OH that's what client does I think.
+                 * init -> Thread.MainLoop(obj).Start() -> OAuth instance(ML) -> HTTPServer start(ML) -> Code populated -> HTTPServer GetToken(ML) ->
+                 * > TokenManager(ML)
+                 * OH that's what client does I think.
                  */
 
                 server = new HTTPServer(oAuth);
@@ -93,7 +95,7 @@ namespace ShimamuraBot
             });
         }
 
-        private static events.OAuthClient oAuth = new events.OAuthClient(token.baseAPIURI, token.clientId, token.clientSecret, @"https://127.0.0.1:8087/auth", "bot");
+        private static events.OAuthClient oAuth = new events.OAuthClient(token.baseAPIURI, token.clientId, token.clientSecret, @"https://127.0.0.1:8087/auth", token.Basic, token.customHeader, "bot");
         private static HTTPServer server = new HTTPServer(oAuth);
         private static VNyan vCat = new VNyan();
         public static MainThread MainLoop = new MainThread();
