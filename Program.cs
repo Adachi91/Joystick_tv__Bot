@@ -22,8 +22,6 @@ namespace ShimamuraBot
         //private static readonly ManualResetEvent ExitEvent = new ManualResetEvent(false);
         //public static CancellationTokenSource ShutdownToken = new CancellationTokenSource();
 
-        //private static client wssClient = new client("wxx://FQDN/APIEndPoint?Token=Token", "shimamura", BotUUID, apolloSecret, "adachi91");
-
         //TODO: This needs a cfg file for UUIDs / port / etc
         public static int LoopbackPort = 8087;
         private void Print(string msg, int lvl) => events.Print(msg, lvl);
@@ -43,7 +41,6 @@ namespace ShimamuraBot
             //I'm actually going to refactor this entire section it's going to call to MainLoop.acecssor/method
 
             public static Dictionary<string, long> FiveMillionTimers = new Dictionary<string, long>();
-            //Dr. Evil air qouatation marks
             //Timer mytimer = new Timer(myTimeTicker);
 
             public MainThread()
@@ -133,43 +130,39 @@ namespace ShimamuraBot
                         //running = false;
                         MainLoop.Stop();
                         break;
-                    case "start" or "run":
+                    case "start" or "run": //TOSTAY
                         events.Print($"The circle is complete bitch, {oAuth.code.Substring(4, 10)}", 0);
                         //check if we have a valid token or refreshable token, do complete OAuth flow.
                         break;
-                    case "config":
+                    case "config"://ehhhhhhhh drake this one
                         events.Print("Idk", 4);
                         //TODO: settings
                         break;
-                    case "fun":
+                    case "fun"://PRUNE?
                         //foreach (var fuckyou in MainThread.FiveMillionTimers)
                         //Console.WriteLine($"fuckyou.key {fuckyou.Key} and fuckyou.value {fuckyou.Value}");
                         MainLoop.Start();
                         //Console.WriteLine($"Result of Millionsooftimerthing is {MainThread.FiveMillionTimers}");
                         //TODO: Setup things like YT, soundcloud, vemo video play commands, and other stuff
                         break;
-                    case "sendit" or "oauth":
+                    case "sendit" or "oauth"://PRUNE
                         //oAuth.OpenbRowser(8087);
                         server.openBrowser(oAuth.fullURI);
                         break;
-                    case "listen":
+                    case "listen"://PRUNE
                         //server = new HTTPServer(oAuth);
                         server.Start();
                         ///events.Print($"Server should have started thingy {asdf}", 0);
                         ////server.StartAsync(oAuth);
                         break;
-                    case "stoplisten":
+                    case "stoplisten"://PRUNE
                         //MainLoop.Touchy(); //why are you like this
                         server.Stop();
                         break;
-                    case "fuckmylife":
-                        //events.OAuthClient.VerifyPortAccessibility(LoopbackPort);
-                        vCat.Redeem("Testa");
-                        break;
-                    case "vcat":
+                    case "vcat"://PRUNE
                         vCat.Redeem("meow");
                         break;
-                    case "help":
+                    case "help"://Fix
                         events.Print($"help - IT DISPLAYS THIS FUCKING MESSAGE", 1);
                         events.Print($"listen - STARTS LISTENING ON THE TEMPORARY FUCKING SERVER OF HTTPLISTENER", 1);
                         events.Print($"stoplisten - STOP THE STUPID FUCKING HTTPLISTENER", 1);   
@@ -180,8 +173,6 @@ namespace ShimamuraBot
                         events.Print("type help", 1);
                         break;
                 }
-
-                //Console.Write("> ");
             }
                 
                 //I was euuuuuuhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh (-drake) testing out a switch feature I didn't know existed.
@@ -198,6 +189,12 @@ namespace ShimamuraBot
 
             return true;
         }
+
+
+        /*
+         * Token management needs to happen before closure
+         * Also eh, idk draw an owl
+         */
 
         private static async void CurrentDomainOnProcessExit(object sender, EventArgs eventArgs)
         {

@@ -2,16 +2,15 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
-using System.Net.Http;
-using System.Net.Http.Headers;
+using System.Net.Http; //to be pruned
+using System.Net.Http.Headers; //to be pruned
 using System.Threading.Tasks;
-using System.Net.Sockets;
+//using System.Net.Sockets;
 using System.Text;
-using System.Diagnostics;
-using System.Runtime.InteropServices;
-using System.Reflection.Metadata;
-using static System.Net.Mime.MediaTypeNames;
-using System.Buffers;
+//using System.Diagnostics;
+//using System.Runtime.InteropServices;
+//using System.Reflection.Metadata;
+//using System.Buffers;
 
 namespace ShimamuraBot
 {
@@ -109,22 +108,22 @@ namespace ShimamuraBot
         }
         #endregion
 
-        public static class TokenManager
+        public class TokenManager
         { //EVERYBODY GETS ACCESS OMG
-            public static string Token;
-            public static string refreshToken;
-            public static string state;
-            public static int expiry;
+            public string Token;
+            public string refreshToken;
+            public string state;
+            public int expiry;
 
 
-            /*public TokenManager(string _token, int _expiry, string _refresh, string _state) {
+            public TokenManager(string _token, int _expiry, string _refresh, string _state) {
                 Token = _token;
                 refreshToken = _refresh;
                 state = _state;
                 expiry = _expiry;
-            }*/
+            }
 
-            public static void UpdateValues(string _token, int _expiry, string _refresh, string _state)
+            public void UpdateValues(string _token, int _expiry, string _refresh, string _state)
             {
                 if (_state != state && !string.IsNullOrEmpty(state)) throw new Exception("states do not match");
                 if (string.IsNullOrEmpty(state)) state = _state;
@@ -134,13 +133,13 @@ namespace ShimamuraBot
                 expiry = _expiry;
             }
 
-            public static void CheckExpiry()
+            public void CheckExpiry()
             {
                 //is this dog?
             }
 
             //Load between sessions
-            public static void LoadLocal(string ZeroZeroTwo)
+            public void LoadLocal(string ZeroZeroTwo)
             {
                 //eh fuck it store it in a txt file named supersecret.txt
 

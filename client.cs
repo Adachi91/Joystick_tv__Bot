@@ -83,6 +83,23 @@ namespace ShimamuraBot
         }
 
 
+
+        public object Parser(string msg)
+        {
+            Object obj = new object { };
+            //have fun asshole.
+
+            return obj;
+        }
+
+
+
+
+
+
+
+
+
         public async Task parseNewFollow()
         {
             /*

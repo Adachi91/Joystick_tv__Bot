@@ -18,7 +18,6 @@ namespace ShimamuraBot
     internal class HTTPServer
     {
         private readonly HttpListener listener;
-        //private bool stopReuqest { get; set; } = false;
         private bool _Started { get; set; } = false;
         private void Print(string msg, int lvl) => events.Print(msg, lvl);
         private events.OAuthClient _OAuthPtr;
@@ -34,9 +33,6 @@ namespace ShimamuraBot
                 listener = new HttpListener();
                 listener.Prefixes.Add($"http://127.0.0.1:{Program.LoopbackPort}/auth/");
                 _OAuthPtr = OAuthPtr;
-                //Task.Run(() => StartAsync(OAuthPtr));
-            //} else
-                //Print($"Unable to start Authorization flow. Port {Program.LoopbackPort} is being used by another program,,", 3);
         }
 
 
@@ -87,7 +83,6 @@ namespace ShimamuraBot
 
         private async Task<bool> PortCheck()
         {
-            //return events.OAuthClient.VerifyPortAccessibility(Program.LoopbackPort);
             var port = Program.LoopbackPort;
             try
             {

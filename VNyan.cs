@@ -4,8 +4,6 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using System.Net.WebSockets;
-//using System.Text.Json;
-using System.Text.Encodings.Web;
 using System.Threading;
 
 namespace ShimamuraBot
