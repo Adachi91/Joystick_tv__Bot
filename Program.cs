@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using System.Collections.Generic;
 using System.Linq;
 using System.Security.Cryptography.X509Certificates;
+using System.Text;
 
 namespace ShimamuraBot
 {
@@ -17,14 +18,27 @@ namespace ShimamuraBot
         public static string apolloSecret = token.secret2;
         public static string BotUUID = token.UUID;
         #endregion
+        public static int LoopbackPort = 8087;
+
+        public static string HOST;
+        public static string CLIENT_ID;
+        public static string CLIENT_SECRET;
+        public static string WSS_HOST;
+        public static string WSS_GATEWAY;
+        public static string ACCESS_TOKEN;
+        public static object GATEWAY_IDENTIFIER;
+        public static string APP_JWT;
+        public static long APP_JWT_EXPIRY;
+        public static string APP_JWT_REFRESH;
+
+        private void Print(string msg, int lvl) => events.Print(msg, lvl);
 
 
+
+
+        #region MainLoopMultiThreading_TODO
         //private static readonly ManualResetEvent ExitEvent = new ManualResetEvent(false);
         //public static CancellationTokenSource ShutdownToken = new CancellationTokenSource();
-
-        //TODO: This needs a cfg file for UUIDs / port / etc
-        public static int LoopbackPort = 8087;
-        private void Print(string msg, int lvl) => events.Print(msg, lvl);
 
         //TODO: Refactor this entire fucking piece of shit
         public class MainThread
@@ -91,6 +105,7 @@ namespace ShimamuraBot
 
             });
         }
+        #endregion
 
         private static events.OAuthClient oAuth = new events.OAuthClient(token.baseAPIURI, token.clientId, token.clientSecret, @"https://127.0.0.1:8087/auth", token.Basic, token.customHeader, "bot");
         private static HTTPServer server = new HTTPServer(oAuth);
@@ -119,6 +134,15 @@ namespace ShimamuraBot
             Console.ForegroundColor = ConsoleColor.White;
 
             Console.WriteLine("Type \"Help\" for commands, or \"Start\" to start the bot");
+            envManager.load(@".env");
+
+            ///events.Print($"[.env]: Host: {HOST}", 0);
+            ///events.Print($"[.env]: ID: {CLIENT_ID}", 0);
+            ///events.Print($"[.env]: Secret: {CLIENT_SECRET}", 0);
+            ///events.Print($"[.env]: WSS: {WSS_HOST}", 0);
+            ///events.Print($"[.env]: Token: {ACCESS_TOKEN}", 0);
+            ///events.Print($"[.env]: Gateway: {GATEWAY_IDENTIFIER}", 0);
+            events.Print($"[.env]: {APP_JWT_EXPIRY}", 0);
 
             while (MainLoop.Running()) {
                 Console.Write(">");

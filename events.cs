@@ -90,7 +90,10 @@ namespace ShimamuraBot
             string[] ctx = formatPrint(text); //index 0 is Tag from which class / service. index 1 is the message.
 
             switch (level) {
-                case 0: Console.ForegroundColor = debug; Console.Write($"[Debug]{ctx[0]}:"); Console.ForegroundColor = current; Console.Write($" {ctx[1]}\r\n");
+                case 0:
+                    #if DEBUG
+                        Console.ForegroundColor = debug; Console.Write($"[Debug]{ctx[0]}:"); Console.ForegroundColor = current; Console.Write($" {ctx[1]}\r\n"); 
+                    #endif
                     break;
                 case 1: ctx = formatPrint(text); Console.WriteLine($"[System]{ctx[0]}: {ctx[1]}");
                     break;
@@ -108,7 +111,7 @@ namespace ShimamuraBot
         }
         #endregion
 
-        public class TokenManager
+        /*public class TokenManager
         { //EVERYBODY GETS ACCESS OMG
             public string Token;
             public string refreshToken;
@@ -144,7 +147,7 @@ namespace ShimamuraBot
                 //eh fuck it store it in a txt file named supersecret.txt
 
             }
-        }
+        }*/
 
         public class OAuthClient
         {
