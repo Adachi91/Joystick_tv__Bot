@@ -9,7 +9,7 @@ using System.Text.Encodings.Web;
 
 namespace ShimamuraBot
 {
-    class client
+    class WebsocketClient
     {
         /* WHY DID I KEEP IT, BECAUSE IF UCKING LOVE RFCS THAT'S WHY
          * RFC 6455 REF
@@ -27,7 +27,7 @@ namespace ShimamuraBot
          * 1003 indicates that an endpoint is terminating the connection because it has received a type of data it cannot accept (e.g., an endpoint that understands only text data MAY send this if it receives a binary message).
          */
 
-        private void Print(string msg, int lvl) => events.Print(msg, lvl);
+        //private void Print(string msg, int lvl) => events.Print(msg, lvl);
         private Uri _uri { get; set; }
         public bool _connected { get; private set; }
         public bool isExiting { get; set; }
@@ -47,7 +47,7 @@ namespace ShimamuraBot
         /// <param name="bot_uuid">Bot UUID</param>
         /// <param name="bot_token">Bot Token</param>
         /// <param name="stream_id">Stream usernname</param>
-        public client(Uri uri, string bot_id, string bot_uuid, string bot_token, string stream_id="")
+        public WebsocketClient(Uri uri, string bot_id, string bot_uuid, string bot_token, string stream_id="")
         {
             _webSocket = new ClientWebSocket();
             _webSocket.Options.AddSubProtocol("wss");

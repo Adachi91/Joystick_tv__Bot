@@ -21,8 +21,7 @@ namespace ShimamuraBot
                 throw new Exception("Could not find the environment file.");
 
             string tmp = null; //hold the long in a string for this type of switch to work.
-            foreach (var line in File.ReadAllLines(fp))
-            {
+            foreach (var line in File.ReadAllLines(fp)) {
                 var split = line.Split('=', StringSplitOptions.RemoveEmptyEntries);
 
                 if (split.Length != 2) continue;
@@ -30,8 +29,7 @@ namespace ShimamuraBot
                 //Environment.SetEnvironmentVariable(split[0], split[1]);
                 //I decided not to use Enviroment Variables because it isn't imediately clear via code what the variable names are.
 
-                var envKey = split[0] switch
-                {
+                var envKey = split[0] switch {
                     "HOST" => HOST = split[1],
                     "CLIENT_ID" => CLIENT_ID = split[1],
                     "CLIENT_SECRET" => CLIENT_SECRET = split[1],
@@ -45,9 +43,9 @@ namespace ShimamuraBot
 
             if (HOST == null || CLIENT_ID == null || CLIENT_SECRET == null || WSS_HOST == null) throw new Exception("One or more values in the environment file was not found\nThe minimum is required\nHOST=HOST_URL\nCLIENT_ID=YOUR_CLIENT_ID\nCLIENT_SECRET=YOUR_CLIENT_SECRET\nWSS_HOST=THE_WSS_ENDPOINT\n");
 
-            ACCESS_TOKEN = Convert.ToBase64String(Encoding.UTF8.GetBytes($"{CLIENT_ID}:{CLIENT_SECRET}"));
+            //ACCESS_TOKEN = Convert.ToBase64String(Encoding.UTF8.GetBytes($"{CLIENT_ID}:{CLIENT_SECRET}"));
             GATEWAY_IDENTIFIER = new { channel = "GatewayChannel" };
-            WSS_GATEWAY = $"{WSS_HOST}?token={ACCESS_TOKEN}";
+            //WSS_GATEWAY = $"{WSS_HOST}?token={ACCESS_TOKEN}"; //this needs to be set where JWT is handled.
             if (!string.IsNullOrEmpty(tmp)) APP_JWT_EXPIRY = Convert.ToInt64(tmp);
         }
 
@@ -61,25 +59,18 @@ namespace ShimamuraBot
 
             List<string> env = File.ReadAllLines(fp).ToList();
 
-            for (int i = 0; i < env.Count; i++)
-            {
-                if (env[i].StartsWith("JWT="))
-                {
+            for (int i = 0; i < env.Count; i++) {
+                if (env[i].StartsWith("JWT=")){
                     JWT_SET = true;
                     env[i] = "JWT=" + APP_JWT;
-                }
-                else if (env[i].StartsWith("JWT_REFRESH="))
-                {
+                } else if (env[i].StartsWith("JWT_REFRESH=")) {
                     env[i] = "JWT_REFRESH=" + APP_JWT_REFRESH;
-                }
-                else if (env[i].StartsWith("JWT_EXPIRE="))
-                {
+                } else if (env[i].StartsWith("JWT_EXPIRE=")) {
                     env[i] = "JWT_EXPIRE" + APP_JWT_EXPIRY.ToString();
                 }
             }
 
-            if (!JWT_SET)
-            {
+            if (!JWT_SET) {
                 env.Add("JWT=" + APP_JWT);
                 env.Add("JWT_REFRESH=" + APP_JWT_REFRESH);
                 env.Add("JWT_EXPIRE=" + APP_JWT_EXPIRY.ToString());

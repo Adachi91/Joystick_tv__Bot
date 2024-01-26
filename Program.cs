@@ -9,8 +9,7 @@ using System.Linq;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using System.Runtime.CompilerServices;
-//using ShimamuraBot;
-//using ShimamuraBot;
+using System.Reflection.Metadata;
 
 namespace ShimamuraBot
 {
@@ -23,14 +22,12 @@ namespace ShimamuraBot
         public static string CLIENT_SECRET;
         public static string WSS_HOST;
         public static string WSS_GATEWAY;
-        public static string ACCESS_TOKEN;
+        //public static string ACCESS_TOKEN; // I use APP_JWT identifier to find the JWT, expiry, and refresh tokens faster
         public static object GATEWAY_IDENTIFIER;
         public static string APP_JWT;
         public static long APP_JWT_EXPIRY;
         public static string APP_JWT_REFRESH;
-
-        private void Print(string msg, int lvl) => events.Print(msg, lvl);
-
+        public static string ENVIRONMENT_PATH;
         
 
         #region MainLoopMultiThreading_TODO
@@ -104,9 +101,8 @@ namespace ShimamuraBot
         }
         #endregion
 
-        private static events.OAuthClient oAuth;// = new events.OAuthClient(token.baseAPIURI, token.clientId, token.clientSecret, @"https://127.0.0.1:8087/auth", token.Basic, token.customHeader, "bot");
-
-        private static HTTPServer server;// = new HTTPServer(oAuth);
+        private static OAuthClient oAuth;
+        private static HTTPServer server;
         private static VNyan vCat = new VNyan();
         public static MainThread MainLoop = new MainThread();
         static void Main(string[] args)
@@ -114,12 +110,26 @@ namespace ShimamuraBot
             AppDomain.CurrentDomain.ProcessExit += CurrentDomainOnProcessExit;
             Console.CancelKeyPress += ConsoleOnCancelKeyPress;
 
-            envManager.load(".env");
+
+            if (File.Exists(".env")) ENVIRONMENT_PATH = ".env";
+            else {
+                Print($"[Environment]: Could not find the environment file, please specify the path below. Default: .env", 2);
+                while(true) {
+                    Console.Write("path>");
+                    var path = Console.ReadLine();
+
+                    if (path == "exit" || path == "close" || path == "end") Environment.Exit(0);
+                    if (File.Exists(path)) { ENVIRONMENT_PATH = path; break; }
+                    else Print($"[Environment]: Could not find the path: {path}. Please make sure the file path is correct.", 3);
+                }
+            }
+
+            envManager.load(ENVIRONMENT_PATH);
 
             //Now we have info.
 
             //oAuth = new events.OAuthClient(HOST, CLIENT_ID, CLIENT_SECRET, $"https://127.0.0.1:{LoopbackPort}/auth", ACCESS_TOKEN, "X-JOYSTICK-STATE", "bot");
-            oAuth = new events.OAuthClient(
+            oAuth = new OAuthClient(
                 HOST,
                 CLIENT_ID,
                 CLIENT_SECRET,
@@ -133,6 +143,7 @@ namespace ShimamuraBot
 
 
             if (!MainLoop.Running()) MainLoop.Run();
+            Console.Clear();
             #region Welcome ASCII garbage
             Console.ForegroundColor = ConsoleColor.Cyan;
             string headerBorder = new string('=', Console.WindowWidth);
@@ -157,7 +168,7 @@ namespace ShimamuraBot
             ///events.Print($"[.env]: WSS: {WSS_HOST}", 0);
             ///events.Print($"[.env]: Token: {ACCESS_TOKEN}", 0);
             ///events.Print($"[.env]: Gateway: {GATEWAY_IDENTIFIER}", 0);
-            events.Print($"[.env]: {APP_JWT_EXPIRY}", 0);
+            events.Print($"[environment]: Successfully loaded environment file.", 1);
 
             while (MainLoop.Running()) {
                 Console.Write(">");
@@ -165,6 +176,8 @@ namespace ShimamuraBot
 
                 switch (input.ToLower())
                 {
+                    case "":
+                        break;
                     case "exit" or "quit" or "stop":
                         //running = false;
                         MainLoop.Stop();
@@ -174,7 +187,10 @@ namespace ShimamuraBot
                         //check if we have a valid token or refreshable token, do complete OAuth flow.
                         break;
                     case "config"://ehhhhhhhh drake this one
-                        File.WriteAllText("oAuth2.txt", oAuth.OAuthCode);
+                        //File.WriteAllText("oAuth2.txt", oAuth.OAuthCode);
+                        var t = Task.Run(() => {
+                            oAuth.callmewhateverlater(1);
+                        });
                         events.Print("Idk - dumped oauth code to oauth2.txt", 4);
                         //TODO: settings
                         break;
@@ -186,7 +202,7 @@ namespace ShimamuraBot
                         //TODO: Setup things like YT, soundcloud, vemo video play commands, and other stuff
                         break;
                     case "sendit" or "oauth"://PRUNE  AFTER FLOW HAS BEEN COMPLETE.
-                        oAuth.State = events.OAuthClient.Generatestate(); // FIX THIS SHIT PELASE
+                        oAuth.State = OAuthClient.Generatestate(); // FIX THIS SHIT PELASE
                         server.openBrowser(oAuth.Auth_URI.ToString() + $"?client_id={CLIENT_ID}&scope=bot&state={oAuth.State}");
                         break;
                     case "listen"://PRUNE AFTER FLOW HAS BEEN COMPLETE.

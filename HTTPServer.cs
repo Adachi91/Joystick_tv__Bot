@@ -10,8 +10,8 @@ using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
-using System.Net.Http;
-using System.Net.Http.Headers;
+//using System.Net.Http;
+//using System.Net.Http.Headers;
 
 namespace ShimamuraBot
 {
@@ -19,15 +19,16 @@ namespace ShimamuraBot
     {
         private readonly HttpListener listener;
         private bool _Started { get; set; } = false;
-        private void Print(string msg, int lvl) => events.Print(msg, lvl);
-        private events.OAuthClient _OAuthPtr;
+        //private void Print(string msg, int lvl) => events.Print(msg, lvl);
+        private OAuthClient _OAuthPtr;
 
         private CancellationTokenSource cts = new CancellationTokenSource();
+        private CancellationToken cancelToken;
 
         /// <summary>
         /// Constructor, Creates new HttpListener, and sets Class obj ptr of OAuth
         /// </summary>
-        public HTTPServer(events.OAuthClient OAuthPtr) {
+        public HTTPServer(OAuthClient OAuthPtr) {
                 Print("[HTTPServer]: Constructed the HTTP Listener", 0);
 
                 listener = new HttpListener();
@@ -37,8 +38,10 @@ namespace ShimamuraBot
 
 
         public async Task<bool> Start() {
+            cancelToken = cts.Token;
+
             if (!await PortCheck())
-                Task.Run(() => StartAsync(_OAuthPtr, CancellationToken.None));
+                Task.Run(() => StartAsync(_OAuthPtr, cancelToken));
 
             while(!_Started) { //Dumbass way to wait for Raising the HTTPListener
                 if(listener.IsListening)
@@ -92,19 +95,13 @@ namespace ShimamuraBot
             Print($"Opening {url.Substring(0, 19)} in your webbrowser for authorization", 1);
             try {
                 Process.Start(url);
-            }
-            /*catch (System.ComponentModel.Win32Exception noBrowser)
-            {
-                if (noBrowser.ErrorCode == -2147467259)
-                    //MessageBox.Show(noBrowser.Message);
-                Print($"[Browser]: {noBrowser.Message}", 3);
-            }*/ catch /*(Exception ex)*/ {
+            } catch {
                 if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows)) {
                     url = url.Replace("&", "^&");
-                    //Process.Start(new ProcessStartInfo("cmd", $"/c start \"\" \"{url}\"") { CreateNoWindow = true });
-                    //Process.Start(new ProcessStartInfo(url) { UseShellExecute = true });
-                    //Process.Start(new ProcessStartInfo { FileName = url, UseShellExecute = true });
-                    Process.Start("explorer", url);
+                    Process.Start(new ProcessStartInfo("cmd", $"/c start \"\" {url}") { CreateNoWindow = true });
+                    //firefox updated during writing the code and since I had firefox open, the old executable was in memory but a new executable was on disk
+                    //the program would not launch a new instance of "firefox" because they were mismatching? or something else that I do not understand fully.
+                    //upon restarting firefox it works
                 }
                 else if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux)) {
                     Process.Start("xdg-open", url);
@@ -114,22 +111,17 @@ namespace ShimamuraBot
                 } else {
                     throw new Exception("Unable to Launch System Browser.");
                 }
-                //Print($"[Process.Start]: Exception occured: {ex}", 3);
             }
         }
 
-        /*
-         * The only use case for this right now is getting OAuth token
-         * it needs to be reusable
-         */
-
         //Currently thread blocking, so yeah mainloop idea might not have been so dumb.
+
         /// <summary>
         /// Loopback listener, Main Thread -> Listener -> Data -> StopListening -> Send Main Thread.InstanceEvents
         /// </summary>
         /// <param name="OAuthPtr">Pointer to Constructed OAuth Class</param>
         /// <returns></returns>
-        private async Task StartAsync(events.OAuthClient OAuthPtr, CancellationToken Token)
+        private async Task StartAsync(OAuthClient OAuthPtr, CancellationToken Token)
         {
             listener.Start();
             _Started = true;
@@ -141,7 +133,7 @@ namespace ShimamuraBot
                 {
                     var context = await listener.GetContextAsync();
                     var request = context.Request;
-                    var requestBody = await new StreamReader(request.InputStream).ReadToEndAsync();
+                    var requestBody = await new StreamReader(request.InputStream).ReadToEndAsync(Token);
 
                     if (!string.IsNullOrEmpty(request.QueryString["state"]))
                         if (request.QueryString["state"] == OAuthPtr.State)
@@ -153,16 +145,17 @@ namespace ShimamuraBot
                             Print("[HTTPServer]: The nounce returned by the Host was not a match! MITM detected", 3); //I honestly do not think this can ever proc, as it's TLS and even evil twin would not be able to pass it.
 
 
-                    File.WriteAllText("oauthcode1.txt", OAuthPtr.OAuthCode);
-
                     var response = context.Response;
                     response.ContentType = "text/html";
                     var responseBytes = Encoding.UTF8.GetBytes("<!DOCTYPE html><html lang=\"en\"><head><title>Authorization Successful</title><style>html,body{background-color:#1c1b22;color:#fff;} h1 {margin:auto; text-align:center; padding-top:5rem;}</style></head><body><h1>Request was Successful. You may close this page now.</h1></body></html>");
                     response.OutputStream.Write(responseBytes, 0, responseBytes.Length);
                     response.Close();
 
-                    if (response.StatusCode == 200)
+                    if (response.StatusCode == 200) {
+                        Print($"[HTTPServer]: Got OAuth code from {HOST}", 0);
+                        Print($"[HTTPServer]: Shutting down..", 0);
                         cts.Cancel();
+                    }
 
                 } catch (HttpListenerException ex) {
                     if (ex.ErrorCode == 995) {
@@ -173,7 +166,7 @@ namespace ShimamuraBot
                 } catch (Exception ex) { Print($"[HTTPServer]: {ex}", 3); }
             }
 
-            Print($"[HTTPServer]: Shutting down", 0);
+            Print($"[HTTPServer]: Shutting down", 1);
             listener.Stop();
             Task.Delay(1000).Wait();
         }
@@ -182,7 +175,7 @@ namespace ShimamuraBot
         /// Stop the HTTPServer client
         /// </summary>
         public void Stop() {
-            if(!_Started) { Print($"[HTTPServer]: Server is not currently running", 0); return; }
+            if(!_Started) { Print($"[HTTPServer]: Server is not currently running", 2); return; }
             cts.Cancel();
         }
     }

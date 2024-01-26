@@ -8,6 +8,10 @@ using System.Threading.Tasks;
 //using System.Net.Sockets;
 using System.Text;
 using System.IO;
+using System.Net.Http.Json;
+using System.Text.Json;
+using System.Reflection.PortableExecutable;
+using Microsoft.VisualBasic;
 //using System.Runtime.InteropServices;
 
 namespace ShimamuraBot
@@ -84,20 +88,20 @@ namespace ShimamuraBot
             ConsoleColor debug = ConsoleColor.Cyan;
             ConsoleColor warn = ConsoleColor.Yellow;
             ConsoleColor error = ConsoleColor.Red;
-            Console.SetCursorPosition(1, Console.CursorTop);
+            Console.SetCursorPosition(0, Console.CursorTop);
             string[] ctx = formatPrint(text); //index 0 is Tag from which class / service. index 1 is the message.
 
             switch (level) {
                 case 0:
                     #if DEBUG
-                        Console.ForegroundColor = debug; Console.Write($"[Debug]{ctx[0]}:"); Console.ForegroundColor = current; Console.Write($" {ctx[1]}\r\n"); 
+                        Console.ForegroundColor = debug; Console.Write($" [Debug]{ctx[0]}:"); Console.ForegroundColor = current; Console.Write($" {ctx[1]}\r\n"); 
                     #endif
                     break;
-                case 1: ctx = formatPrint(text); Console.WriteLine($"[System]{ctx[0]}: {ctx[1]}");
+                case 1: ctx = formatPrint(text); Console.WriteLine($" [System]{ctx[0]}: {ctx[1]}");
                     break;
-                case 2: Console.ForegroundColor = warn; Console.Write($"[WARN]{ctx[0]}:"); Console.ForegroundColor = current; Console.Write($" {ctx[1]}\r\n");
+                case 2: Console.ForegroundColor = warn; Console.Write($" [WARN]{ctx[0]}:"); Console.ForegroundColor = current; Console.Write($" {ctx[1]}\r\n");
                     break;
-                case 3: Console.ForegroundColor = error; Console.Write($"[ERROR]{ctx[0]}:"); Console.ForegroundColor = current; Console.Write($" {ctx[1]}\r\n");
+                case 3: Console.ForegroundColor = error; Console.Write($" [ERROR]{ctx[0]}:"); Console.ForegroundColor = current; Console.Write($" {ctx[1]}\r\n");
                     break;
                 case 4:
                     Random rand = new Random();
@@ -106,213 +110,21 @@ namespace ShimamuraBot
                 default: Console.WriteLine($"I don't even want to know.");
                     break;
             }
+            Console.Write(">");
         }
         #endregion
 
-        /*public class TokenManager
-        { //EVERYBODY GETS ACCESS OMG
-            public string Token;
-            public string refreshToken;
-            public string state;
-            public int expiry;
 
-
-            public TokenManager(string _token, int _expiry, string _refresh, string _state) {
-                Token = _token;
-                refreshToken = _refresh;
-                state = _state;
-                expiry = _expiry;
-            }
-
-            public void UpdateValues(string _token, int _expiry, string _refresh, string _state)
-            {
-                if (_state != state && !string.IsNullOrEmpty(state)) throw new Exception("states do not match");
-                if (string.IsNullOrEmpty(state)) state = _state;
-
-                Token = _token;
-                refreshToken = _refresh;
-                expiry = _expiry;
-            }
-
-            public void CheckExpiry()
-            {
-                //is this dog?
-            }
-
-            //Load between sessions
-            public void LoadLocal(string ZeroZeroTwo)
-            {
-                //eh fuck it store it in a txt file named supersecret.txt
-
-            }
-        }*/
-
-        public class OAuthClient
+        /// <summary>
+        /// Get the current UTC Unix Timestamp
+        /// </summary>
+        /// <returns>(long) Timestamp</returns>
+        public static long GetUnixTimestamp()
         {
-            /// <summary>
-            /// THIS IS THE ONMLY THING THE CLASS IS BEING USED FOR RIGHT NOW
-            /// </summary>
-            private readonly string Authority;
-            private readonly Uri RedirectURI;
-            private readonly string Scope;
-            private readonly string ClientIdentity;
-            private readonly string ClienttSecret;
-            public readonly Uri Auth_URI;
-            public readonly Uri Token_URI;
-            public string State;
-            public string OAuthCode;
+            long timestamp = (Int64)(DateTime.UtcNow.Subtract(new DateTime(1970, 1, 1))).TotalSeconds;
 
-
-            //public readonly string basicAuth;
-            //public readonly string header;
-            //public string fullURI { get; set; }
-            /*
-             * Terminologies are fun and so fucking obtuse. at least some are intutitive
-             * This type of application is a loopback OAuth application, the request never leaves the device as it's meant to be a
-             * private bot / open source framework for self hosting/modifcation.
-             * OAuth Flow ->
-             * nounce => state
-             * redirecturi => http://127.0.0.1:6969 / http://localhost:6969 etc localnets
-             * grant_type => 'authorization'
-             * scope => self explanatory
-             * leaving some shit out here on purpose because documentation isn't released yet.
-             * Basic => self exp
-             */
-
-
-            /*public OAuthClient(string _authority, string _clientidentity, string _clientseret, string _redirectURI, string _basic, string _header, string _scope = null)
-            {
-                Authority = _authority;
-                clientIdentity = _clientidentity;
-                clienttSecret = _clientseret;
-                redirectURI = _redirectURI;
-                basicAuth = _basic;
-                header = _header;
-                scope = _scope ?? "ALLURBASES";
-
-                state = Generatestate();
-
-                fullURI = $"{Program.HOST}/api/oauth/authorize?client={clientIdentity}&scope=bot&state={state}"; 
-                //fullURI = token.OpenerURI + state;
-            }*/
-
-            // Handle grant_type and code storage inside the class it doesn't nee dto be outside because it should all be handled by this class "THE" oauth constructor / class
-
-            /// <summary>
-            ///  OAuth Constructor class
-            /// </summary>
-            /// <param name="_host">The host with scheme</param>
-            /// <param name="_client_id">Client Identifier</param>
-            /// <param name="_client_secret">Client Secret</param>
-            /// <param name="_authorize_uri">OAuth URI</param>
-            /// <param name="_token_uri">Token URI</param>
-            /// <param name="_redirect_uri">The redirect URI</param>
-            /// <param name="_scope">Scope (optional) should be bot</param>
-            public OAuthClient(string _host, string _client_id, string _client_secret, string _authorize_uri, string _token_uri, string _redirect_uri, string _scope = "ALLURBASES")
-            {
-                if(!_host.StartsWith("https://")) {
-                    events.Print($"[OAuth]: Could not construct the OAuth class. The Scheme detected was not HTTPS", 3);
-                    return;
-                }
-
-                Authority = _host;
-                ClientIdentity = _client_id;
-                ClienttSecret = _client_secret;
-                RedirectURI = new Uri(_redirect_uri);
-
-                Auth_URI = new Uri($"{_host}{_authorize_uri}");
-                Token_URI = new Uri($"{_host}{_token_uri}");
-
-                Scope = _scope;
-
-            }
-
-
-            /// <summary>
-            /// Generate a nounce "state" for comparison on callback to protect against MiTM attacks, however not required for loopback, still implemented.
-            /// </summary>
-            /// <returns></returns>
-            public static string Generatestate() {
-                string chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
-                Random rand = new Random();
-                return new string(Enumerable.Repeat(chars, 32).Select(s => s[rand.Next(s.Length)]).ToArray());
-            }
-
-
-            /// <summary>
-            ///  Post to Joystick's API gateway and request a JWT
-            /// </summary>
-            /// <param name="type">Type of grant. 1:Request, 2:Renew</param>
-            public async void callmewhateverlater(int type) {
-                //Can I please get WebClient back ; _ ;  - 2nd attempt
-                using (HttpClient hc = new HttpClient()) {
-                    //oh boy here we go again
-                    //First attempt
-
-                    //over / under on it exploding?
-                    using (var postMessage = new HttpRequestMessage(HttpMethod.Post, new Uri(Authority + $"redirect_uri=unused&code={OAuthCode}&grant_type=" + (type == 1 ? "authorization_code" : "refresh_token")))) { //I really don't but I really do
-                        postMessage.Headers.Authorization = new AuthenticationHeaderValue("bearer", Convert.ToBase64String(Encoding.UTF8.GetBytes($"{ClientIdentity}:{ClienttSecret}")));
-                        postMessage.Headers.Add("Content-Type", "application/json");
-                        postMessage.Headers.Add("X-JOYSTICK-STATE", State);
-                        //wait what was I doing? I need to switch types
-                        var aaaaaaa = await hc.SendAsync(postMessage);
-
-
-                        if (aaaaaaa.IsSuccessStatusCode) {
-                            string contents = await aaaaaaa.Content.ReadAsStringAsync();
-                            File.WriteAllText("dump.txt", contents);
-                        } else
-                            events.Print($"[HTTPClient]: There was an error processing request {aaaaaaa.StatusCode}", 3);
-                        //need that token manager now, got any of those tokens for managing?
-                    }
-                }
-            }
-
-
-            /// <summary>
-            /// This will return what we's previously called Apollo token that we took from our 2nd account. eh come back and clean this up
-            /// </summary>
-            /// <param name="refreshRequestREEEEEEEE">a</param>
-            /// <param name="cancellation"></param>
-            /// <returns></returns>
-            public async Task RequestToken(bool refreshRequestREEEEEEEE = false, CancellationToken cancellation = default)
-            {
-                using(HttpClient client = new HttpClient()) {
-                    State = Generatestate();
-
-                    client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Basic", $"{Program.ACCESS_TOKEN}");
-                    client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
-                    client.DefaultRequestHeaders.Add("X-JOYSTICK-STATE", State);
-                    FormUrlEncodedContent postOptions;
-                    string secretshitstoredsomewhereintheuniverse = "EEEEEEEEEEEEEEEHhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh"; //placeholder
-
-                    if (!refreshRequestREEEEEEEE) {
-                        postOptions = new FormUrlEncodedContent(new[]
-                        {
-                            new KeyValuePair<string, string>("grant_type", "authorization_code"),
-                            new KeyValuePair<string, string>("code", OAuthCode), //TODO This doesn't make a god damn bit of sense it isn't init
-                            new KeyValuePair<string, string>("redirectUri", "")//RedirectURI)
-                        });
-                    } else {
-                        //request frerefshres I DONT STROKE
-                        postOptions = new FormUrlEncodedContent(new[]
-                        {
-                            new KeyValuePair<string, string>("grant_type", "refresh_token"),
-                            new KeyValuePair<string, string>("refresh_token", secretshitstoredsomewhereintheuniverse),
-                            new KeyValuePair<string, string>("redirectUri", "")//redirectURI)
-                        });
-                    }
-
-                    //REVIEW README for this.
-                    Uri HostEndPoint = new Uri( refreshRequestREEEEEEEE == true ? $"{Program.HOST}/api/oauth/token" : $"{Program.HOST}/api/oauth/authorize" );
-
-                    var tokenRequest = await client.PostAsync(HostEndPoint, postOptions, cancellation);
-
-                    Console.WriteLine(tokenRequest.Content.ToString());
-                }
-            }
+            return timestamp;
         }
-
 
 
         /// <summary>
