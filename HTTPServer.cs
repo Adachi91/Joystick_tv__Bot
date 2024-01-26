@@ -31,41 +31,9 @@ namespace ShimamuraBot
                 Print("[HTTPServer]: Constructed the HTTP Listener", 0);
 
                 listener = new HttpListener();
-                listener.Prefixes.Add($"http://127.0.0.1:{Program.LoopbackPort}/auth/");
+                listener.Prefixes.Add($"http://127.0.0.1:{LoopbackPort}/auth/");
                 _OAuthPtr = OAuthPtr;
         }
-
-
-        /// <summary>
-        ///  Post to Joystick's API gateway and request a JWT
-        /// </summary>
-        /// <param name="type">Type of grant. 1:Request, 2:Renew</param>
-        public async void callmewhateverlater(int type)
-        {
-            //Can I please get WebClient back ; _ ;
-
-            //already on 2nd attemtpts
-            
-
-            using(HttpClient hc = new HttpClient()) {
-                //oh boy here we go again
-                //First attempt
-
-                //over / under on it exploding?
-                using (var postMessage = new HttpRequestMessage(HttpMethod.Post, new Uri(_OAuthPtr.fullURI + $"redirect_uri=unused&code={_OAuthPtr.code}&grant_type=" + (type == 1 ? "authorization_code" : "refresh_token"))))
-                { //I really don't but I really do
-                    postMessage.Headers.Authorization = new AuthenticationHeaderValue("bearer", _OAuthPtr.basicAuth);
-                    postMessage.Headers.Add("Content-Type", "application/json");
-                    postMessage.Headers.Add(_OAuthPtr.header, _OAuthPtr.state);
-                    //wait what was I doing? I need to switch types
-                    var aaaaaaa = await hc.SendAsync(postMessage);
-
-                    
-                    //need that token manager now, got any of those tokens for managing?
-                }
-            }
-        }
-
 
 
         public async Task<bool> Start() {
@@ -81,9 +49,10 @@ namespace ShimamuraBot
             return true;
         }
 
+
         private async Task<bool> PortCheck()
         {
-            var port = Program.LoopbackPort;
+            var port = LoopbackPort;
             try
             {
                 Print($"[HTTPServer]: Checking if port {port} is open", 0);
@@ -124,10 +93,18 @@ namespace ShimamuraBot
             try {
                 Process.Start(url);
             }
-            catch {
+            /*catch (System.ComponentModel.Win32Exception noBrowser)
+            {
+                if (noBrowser.ErrorCode == -2147467259)
+                    //MessageBox.Show(noBrowser.Message);
+                Print($"[Browser]: {noBrowser.Message}", 3);
+            }*/ catch /*(Exception ex)*/ {
                 if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows)) {
                     url = url.Replace("&", "^&");
-                    Process.Start(new ProcessStartInfo("cmd", $"/c start {url}") { CreateNoWindow = true });
+                    //Process.Start(new ProcessStartInfo("cmd", $"/c start \"\" \"{url}\"") { CreateNoWindow = true });
+                    //Process.Start(new ProcessStartInfo(url) { UseShellExecute = true });
+                    //Process.Start(new ProcessStartInfo { FileName = url, UseShellExecute = true });
+                    Process.Start("explorer", url);
                 }
                 else if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux)) {
                     Process.Start("xdg-open", url);
@@ -137,6 +114,7 @@ namespace ShimamuraBot
                 } else {
                     throw new Exception("Unable to Launch System Browser.");
                 }
+                //Print($"[Process.Start]: Exception occured: {ex}", 3);
             }
         }
 
@@ -166,13 +144,16 @@ namespace ShimamuraBot
                     var requestBody = await new StreamReader(request.InputStream).ReadToEndAsync();
 
                     if (!string.IsNullOrEmpty(request.QueryString["state"]))
-                        if (request.QueryString["state"] == OAuthPtr.state)
+                        if (request.QueryString["state"] == OAuthPtr.State)
                             if (!string.IsNullOrEmpty(request.QueryString["code"]))
-                                OAuthPtr.code = request.QueryString["code"];
+                                OAuthPtr.OAuthCode = request.QueryString["code"];
                             else
                                 Print("[HTTPServer]: Unable to retrieve code for OAuth flow", 3);
                         else
-                            Print("[HTTPServer]: The return state of the Authority was a mismatch or invalid", 3);
+                            Print("[HTTPServer]: The nounce returned by the Host was not a match! MITM detected", 3); //I honestly do not think this can ever proc, as it's TLS and even evil twin would not be able to pass it.
+
+
+                    File.WriteAllText("oauthcode1.txt", OAuthPtr.OAuthCode);
 
                     var response = context.Response;
                     response.ContentType = "text/html";

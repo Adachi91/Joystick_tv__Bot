@@ -4,10 +4,11 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using System.IO;
+using static ShimamuraBot.Program;
 
 namespace ShimamuraBot
 {
-    internal class envManager
+    public static class envManager
     {
         /// <summary>
         /// Loads the environment file at the destination

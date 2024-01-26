@@ -2,15 +2,13 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
-using System.Net.Http; //to be pruned
-using System.Net.Http.Headers; //to be pruned
+using System.Net.Http;
+using System.Net.Http.Headers;
 using System.Threading.Tasks;
 //using System.Net.Sockets;
 using System.Text;
-//using System.Diagnostics;
+using System.IO;
 //using System.Runtime.InteropServices;
-//using System.Reflection.Metadata;
-//using System.Buffers;
 
 namespace ShimamuraBot
 {
@@ -24,7 +22,7 @@ namespace ShimamuraBot
          */
         private bool _disposed = false;
 
-        private string theChannel = token.channel;
+        private string theChannel = $"{Program.GATEWAY_IDENTIFIER}"; //THIS NEEDS TO BE SERIALIZED! //token.channel;
         private string _user_id;
         private string _user_uuid;
         private string _stream_id;
@@ -151,16 +149,23 @@ namespace ShimamuraBot
 
         public class OAuthClient
         {
+            /// <summary>
+            /// THIS IS THE ONMLY THING THE CLASS IS BEING USED FOR RIGHT NOW
+            /// </summary>
             private readonly string Authority;
-            private readonly string redirectURI;
-            private readonly string scope;
-            private readonly string clientIdentity;
-            private readonly string clienttSecret;
-            public readonly string state;
-            public readonly string basicAuth;
-            public readonly string header;
-            public string fullURI { get; set; }
-            public string code;
+            private readonly Uri RedirectURI;
+            private readonly string Scope;
+            private readonly string ClientIdentity;
+            private readonly string ClienttSecret;
+            public readonly Uri Auth_URI;
+            public readonly Uri Token_URI;
+            public string State;
+            public string OAuthCode;
+
+
+            //public readonly string basicAuth;
+            //public readonly string header;
+            //public string fullURI { get; set; }
             /*
              * Terminologies are fun and so fucking obtuse. at least some are intutitive
              * This type of application is a loopback OAuth application, the request never leaves the device as it's meant to be a
@@ -174,17 +179,8 @@ namespace ShimamuraBot
              * Basic => self exp
              */
 
-            /// <summary>
-            /// Construct the OAuthClient and it's stateful parameters.
-            /// </summary>
-            /// <param name="_authority">The Authority API Endpoint (Not nessacarily the same as the Flow endpoint</param>
-            /// <param name="_clientidentity">Client Identifaction</param>
-            /// <param name="_clientseret">Client Secret, will be used for Basic</param>
-            /// <param name="_redirectURI">RedirectURI, should be 127.0.0.1:port because this is meant to only be a loopback</param>
-            /// <param name="_basic">The Basic auth key</param>
-            /// <param name="_header">Custom Header to add to request</param>
-            /// <param name="_scope">Optional - Scope for if it's changed in the future</param>
-            public OAuthClient(string _authority, string _clientidentity, string _clientseret, string _redirectURI, string _basic, string _header, string _scope = null)
+
+            /*public OAuthClient(string _authority, string _clientidentity, string _clientseret, string _redirectURI, string _basic, string _header, string _scope = null)
             {
                 Authority = _authority;
                 clientIdentity = _clientidentity;
@@ -196,21 +192,81 @@ namespace ShimamuraBot
 
                 state = Generatestate();
 
-                fullURI = token.OpenerURI + state;
-            }
+                fullURI = $"{Program.HOST}/api/oauth/authorize?client={clientIdentity}&scope=bot&state={state}"; 
+                //fullURI = token.OpenerURI + state;
+            }*/
 
+            // Handle grant_type and code storage inside the class it doesn't nee dto be outside because it should all be handled by this class "THE" oauth constructor / class
+
+            /// <summary>
+            ///  OAuth Constructor class
+            /// </summary>
+            /// <param name="_host">The host with scheme</param>
+            /// <param name="_client_id">Client Identifier</param>
+            /// <param name="_client_secret">Client Secret</param>
+            /// <param name="_authorize_uri">OAuth URI</param>
+            /// <param name="_token_uri">Token URI</param>
+            /// <param name="_redirect_uri">The redirect URI</param>
+            /// <param name="_scope">Scope (optional) should be bot</param>
+            public OAuthClient(string _host, string _client_id, string _client_secret, string _authorize_uri, string _token_uri, string _redirect_uri, string _scope = "ALLURBASES")
+            {
+                if(!_host.StartsWith("https://")) {
+                    events.Print($"[OAuth]: Could not construct the OAuth class. The Scheme detected was not HTTPS", 3);
+                    return;
+                }
+
+                Authority = _host;
+                ClientIdentity = _client_id;
+                ClienttSecret = _client_secret;
+                RedirectURI = new Uri(_redirect_uri);
+
+                Auth_URI = new Uri($"{_host}{_authorize_uri}");
+                Token_URI = new Uri($"{_host}{_token_uri}");
+
+                Scope = _scope;
+
+            }
 
 
             /// <summary>
             /// Generate a nounce "state" for comparison on callback to protect against MiTM attacks, however not required for loopback, still implemented.
             /// </summary>
             /// <returns></returns>
-            private static string Generatestate() {
+            public static string Generatestate() {
                 string chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
                 Random rand = new Random();
                 return new string(Enumerable.Repeat(chars, 32).Select(s => s[rand.Next(s.Length)]).ToArray());
             }
 
+
+            /// <summary>
+            ///  Post to Joystick's API gateway and request a JWT
+            /// </summary>
+            /// <param name="type">Type of grant. 1:Request, 2:Renew</param>
+            public async void callmewhateverlater(int type) {
+                //Can I please get WebClient back ; _ ;  - 2nd attempt
+                using (HttpClient hc = new HttpClient()) {
+                    //oh boy here we go again
+                    //First attempt
+
+                    //over / under on it exploding?
+                    using (var postMessage = new HttpRequestMessage(HttpMethod.Post, new Uri(Authority + $"redirect_uri=unused&code={OAuthCode}&grant_type=" + (type == 1 ? "authorization_code" : "refresh_token")))) { //I really don't but I really do
+                        postMessage.Headers.Authorization = new AuthenticationHeaderValue("bearer", Convert.ToBase64String(Encoding.UTF8.GetBytes($"{ClientIdentity}:{ClienttSecret}")));
+                        postMessage.Headers.Add("Content-Type", "application/json");
+                        postMessage.Headers.Add("X-JOYSTICK-STATE", State);
+                        //wait what was I doing? I need to switch types
+                        var aaaaaaa = await hc.SendAsync(postMessage);
+
+
+                        if (aaaaaaa.IsSuccessStatusCode) {
+                            string contents = await aaaaaaa.Content.ReadAsStringAsync();
+                            File.WriteAllText("dump.txt", contents);
+                        } else
+                            events.Print($"[HTTPClient]: There was an error processing request {aaaaaaa.StatusCode}", 3);
+                        //need that token manager now, got any of those tokens for managing?
+                    }
+                }
+            }
 
 
             /// <summary>
@@ -222,9 +278,11 @@ namespace ShimamuraBot
             public async Task RequestToken(bool refreshRequestREEEEEEEE = false, CancellationToken cancellation = default)
             {
                 using(HttpClient client = new HttpClient()) {
-                    client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Basic", token.Basic);
+                    State = Generatestate();
+
+                    client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Basic", $"{Program.ACCESS_TOKEN}");
                     client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
-                    client.DefaultRequestHeaders.Add(token.customHeader, state);
+                    client.DefaultRequestHeaders.Add("X-JOYSTICK-STATE", State);
                     FormUrlEncodedContent postOptions;
                     string secretshitstoredsomewhereintheuniverse = "EEEEEEEEEEEEEEEHhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh"; //placeholder
 
@@ -232,8 +290,8 @@ namespace ShimamuraBot
                         postOptions = new FormUrlEncodedContent(new[]
                         {
                             new KeyValuePair<string, string>("grant_type", "authorization_code"),
-                            new KeyValuePair<string, string>("code", code), //TODO This doesn't make a god damn bit of sense it isn't init
-                            new KeyValuePair<string, string>("redirectUri", redirectURI)
+                            new KeyValuePair<string, string>("code", OAuthCode), //TODO This doesn't make a god damn bit of sense it isn't init
+                            new KeyValuePair<string, string>("redirectUri", "")//RedirectURI)
                         });
                     } else {
                         //request frerefshres I DONT STROKE
@@ -241,11 +299,14 @@ namespace ShimamuraBot
                         {
                             new KeyValuePair<string, string>("grant_type", "refresh_token"),
                             new KeyValuePair<string, string>("refresh_token", secretshitstoredsomewhereintheuniverse),
-                            new KeyValuePair<string, string>("redirectUri", redirectURI)
+                            new KeyValuePair<string, string>("redirectUri", "")//redirectURI)
                         });
                     }
 
-                    var tokenRequest = await client.PostAsync(token.baseAPIURI, postOptions, cancellation);
+                    //REVIEW README for this.
+                    Uri HostEndPoint = new Uri( refreshRequestREEEEEEEE == true ? $"{Program.HOST}/api/oauth/token" : $"{Program.HOST}/api/oauth/authorize" );
+
+                    var tokenRequest = await client.PostAsync(HostEndPoint, postOptions, cancellation);
 
                     Console.WriteLine(tokenRequest.Content.ToString());
                 }

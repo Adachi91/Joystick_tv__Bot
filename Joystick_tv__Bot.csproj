@@ -2,7 +2,7 @@
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
-    <TargetFramework>net6.0</TargetFramework>
+    <TargetFramework>net8.0</TargetFramework>
     <SignAssembly>False</SignAssembly>
     <AssemblyOriginatorKeyFile>AdachiSig.pfx</AssemblyOriginatorKeyFile>
     <DelaySign>false</DelaySign>
@@ -26,10 +26,6 @@
 
   <ItemGroup>
     <Content Include="de8j64k_92250c71_aef9_4892_9433_d4c393b36aca_qpz_icon.ico" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <Folder Include="vendor\" />
   </ItemGroup>
 
 </Project>

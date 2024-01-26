@@ -8,16 +8,14 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
+using System.Runtime.CompilerServices;
+//using ShimamuraBot;
+//using ShimamuraBot;
 
 namespace ShimamuraBot
 {
     class Program
     {
-        #region apolloToken class import
-        private token token = new token();
-        public static string apolloSecret = token.secret2;
-        public static string BotUUID = token.UUID;
-        #endregion
         public static int LoopbackPort = 8087;
 
         public static string HOST;
@@ -33,8 +31,7 @@ namespace ShimamuraBot
 
         private void Print(string msg, int lvl) => events.Print(msg, lvl);
 
-
-
+        
 
         #region MainLoopMultiThreading_TODO
         //private static readonly ManualResetEvent ExitEvent = new ManualResetEvent(false);
@@ -107,8 +104,9 @@ namespace ShimamuraBot
         }
         #endregion
 
-        private static events.OAuthClient oAuth = new events.OAuthClient(token.baseAPIURI, token.clientId, token.clientSecret, @"https://127.0.0.1:8087/auth", token.Basic, token.customHeader, "bot");
-        private static HTTPServer server = new HTTPServer(oAuth);
+        private static events.OAuthClient oAuth;// = new events.OAuthClient(token.baseAPIURI, token.clientId, token.clientSecret, @"https://127.0.0.1:8087/auth", token.Basic, token.customHeader, "bot");
+
+        private static HTTPServer server;// = new HTTPServer(oAuth);
         private static VNyan vCat = new VNyan();
         public static MainThread MainLoop = new MainThread();
         static void Main(string[] args)
@@ -116,9 +114,26 @@ namespace ShimamuraBot
             AppDomain.CurrentDomain.ProcessExit += CurrentDomainOnProcessExit;
             Console.CancelKeyPress += ConsoleOnCancelKeyPress;
 
+            envManager.load(".env");
+
+            //Now we have info.
+
+            //oAuth = new events.OAuthClient(HOST, CLIENT_ID, CLIENT_SECRET, $"https://127.0.0.1:{LoopbackPort}/auth", ACCESS_TOKEN, "X-JOYSTICK-STATE", "bot");
+            oAuth = new events.OAuthClient(
+                HOST,
+                CLIENT_ID,
+                CLIENT_SECRET,
+                "/api/oauth/authorize",
+                "/api/oauth/token",
+                $"https://127.0.0.1:{LoopbackPort}/auth",
+                "bot"
+            );
+
+            server = new HTTPServer(oAuth);
+
 
             if (!MainLoop.Running()) MainLoop.Run();
-
+            #region Welcome ASCII garbage
             Console.ForegroundColor = ConsoleColor.Cyan;
             string headerBorder = new string('=', Console.WindowWidth);
             Console.WriteLine(headerBorder);
@@ -134,7 +149,7 @@ namespace ShimamuraBot
             Console.ForegroundColor = ConsoleColor.White;
 
             Console.WriteLine("Type \"Help\" for commands, or \"Start\" to start the bot");
-            envManager.load(@".env");
+            #endregion
 
             ///events.Print($"[.env]: Host: {HOST}", 0);
             ///events.Print($"[.env]: ID: {CLIENT_ID}", 0);
@@ -155,11 +170,12 @@ namespace ShimamuraBot
                         MainLoop.Stop();
                         break;
                     case "start" or "run": //TOSTAY
-                        events.Print($"The circle is complete bitch, {oAuth.code.Substring(4, 10)}", 0);
+                        events.Print($"The circle is complete bitch, {oAuth.OAuthCode.Substring(4, 10)}", 0);
                         //check if we have a valid token or refreshable token, do complete OAuth flow.
                         break;
                     case "config"://ehhhhhhhh drake this one
-                        events.Print("Idk", 4);
+                        File.WriteAllText("oAuth2.txt", oAuth.OAuthCode);
+                        events.Print("Idk - dumped oauth code to oauth2.txt", 4);
                         //TODO: settings
                         break;
                     case "fun"://PRUNE?
@@ -169,17 +185,17 @@ namespace ShimamuraBot
                         //Console.WriteLine($"Result of Millionsooftimerthing is {MainThread.FiveMillionTimers}");
                         //TODO: Setup things like YT, soundcloud, vemo video play commands, and other stuff
                         break;
-                    case "sendit" or "oauth"://PRUNE
-                        //oAuth.OpenbRowser(8087);
-                        server.openBrowser(oAuth.fullURI);
+                    case "sendit" or "oauth"://PRUNE  AFTER FLOW HAS BEEN COMPLETE.
+                        oAuth.State = events.OAuthClient.Generatestate(); // FIX THIS SHIT PELASE
+                        server.openBrowser(oAuth.Auth_URI.ToString() + $"?client_id={CLIENT_ID}&scope=bot&state={oAuth.State}");
                         break;
-                    case "listen"://PRUNE
+                    case "listen"://PRUNE AFTER FLOW HAS BEEN COMPLETE.
                         //server = new HTTPServer(oAuth);
                         server.Start();
                         ///events.Print($"Server should have started thingy {asdf}", 0);
                         ////server.StartAsync(oAuth);
                         break;
-                    case "stoplisten"://PRUNE
+                    case "stoplisten"://PRUNE  AFTER FLOW HAS BEEN COMPLETE.
                         //MainLoop.Touchy(); //why are you like this
                         server.Stop();
                         break;
