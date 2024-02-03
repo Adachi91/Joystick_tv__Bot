@@ -55,9 +55,10 @@ namespace ShimamuraBot
             ctx = cts.Token;
 
             WSSClient = new ClientWebSocket();
-            WSSClient.Options.AddSubProtocol("wss");
+            //WSSClient.Options.AddSubProtocol("wss");
             WSSClient.Options.AddSubProtocol("actioncable-v1-json");
-            WSSClient.Options.AddSubProtocol("actioncable-unsupported");
+            
+            //WSSClient.Options.AddSubProtocol("actioncable-unsupported");
 
 
             //_events = new events(bot_id, bot_uuid, bot_token, stream_id);
@@ -66,8 +67,9 @@ namespace ShimamuraBot
 
         public async Task Connect()
         {
-            Print($"[WSSClient]: Attempting to connect to {WSS_HOST}", 0);
+            Print($"[WSSClient]: Attempting to connect to {WSS_HOST}", 0); //CHANGE THIS BACK!!!!!!!
             try {
+                WSSClient.Options.SetRequestHeader("Sec-WebSocket-Protocol", "actioncable-v1-json");
                 await WSSClient.ConnectAsync(new Uri(WSS_GATEWAY), ctx);
                 _connected = true;
             } catch (Exception ex) {
@@ -113,13 +115,14 @@ namespace ShimamuraBot
         public void onMessage(string data) {
             //var msg = JsonSerializer.Deserialize<JSONDataStruct>(data);
 
-            dynamic msg = JsonSerializer.Deserialize<dynamic>(data);
+            /*dynamic msg = JsonSerializer.Deserialize<dynamic>(data);
 
             Print($"[WSS.onMessage]: {msg.identifier} {msg.message}", 0);
 
             dynamic msg2 = JsonSerializer.Deserialize<dynamic>(msg.message);
 
-            Print($"[WSS.onMessage]: {msg2.type} --- {msg2}", 0);
+            Print($"[WSS.onMessage]: {msg2.type} --- {msg2}", 0);*/
+            Print($"[WSSClient]: I died. {data}", 0);
         }
 
         public void FidgetyStuff(string msg) {
@@ -141,7 +144,7 @@ namespace ShimamuraBot
             }
         }
 
-        private string stringifyJSON(string data, object obj2 = null, object obj3 = null)
+        /*private string stringifyJSON(string data, object obj2 = null, object obj3 = null)
         {
             var json = JsonSerializer.Serialize(obj2);
             var gateway = JsonSerializer.Serialize(GATEWAY_IDENTIFIER);
@@ -165,7 +168,7 @@ namespace ShimamuraBot
                 return resp;
             }
             return null;
-        }
+        }*/
 
         public string JSONobjToString(string type)
         {
@@ -180,7 +183,7 @@ namespace ShimamuraBot
             };*/
 
 
-            string json = JsonSerializer.Serialize(obj);
+            //string json = JsonSerializer.Serialize(obj);
 
 
             //int strlen = "Addresses\":".Length;
@@ -197,9 +200,9 @@ namespace ShimamuraBot
 
             
 
-            var fuckit = json.Replace("}}", "}"); //remove trailing ends
-            var fuckitbuckit = fuckit.Replace("\"", "\\\""); //replace all qoutations with escaped qoutations to stringify
-            var fuckastep = $"\"{fuckitbuckit}\""; //then wrap that shit in qoutations
+            ///var fuckit = json.Replace("}}", "}"); //remove trailing ends
+            ///var fuckitbuckit = fuckit.Replace("\"", "\\\""); //replace all qoutations with escaped qoutations to stringify
+            ///var fuckastep = $"\"{fuckitbuckit}\""; //then wrap that shit in qoutations
 
 
             //Print($"First index: {{fuck[1]}} and split 2: {fuckastep}", 3);
@@ -208,7 +211,7 @@ namespace ShimamuraBot
             switch (type)
             {
                 case "gateway":
-
+                    return "fuckoff";
                     break;
                 default:
                     return null;
@@ -222,33 +225,45 @@ namespace ShimamuraBot
         }
 
 
-        public void sendMessage(string data) {
+        public async Task sendMessage(string data) {
 
             //var tmp = JsonSerializer.Serialize(GATEWAY_IDENTIFIER);
             //var temp2 = $"\"{tmp.Replace("\"", "\\\"")}\"";
 
-            JArray jsonarray = new JArray();
+            //dynamic test = JObject.Parse(GATEWAY_IDENTIFIER);
+            ///{ "command": "subscribe",
+            ///"identifier": "{\"channel\":\"GatewayChannel\",\"streamer\":\"joystickuser\"}" }
+            //user_id backup
+            var fuckoff = "{\"channel\":\"GatewayChannel\",\"streamer\":\"adachi91\"}";
+
+            JObject o = new JObject {{ "command", data },{ "identifier", fuckoff }};
+
+            Print($"{o.ToString()}", 0);
+
+            //JArray jsonarray = new JArray();
 
 
-            var a = JSONobjToString(GATEWAY_IDENTIFIER);
+            //var a = JSONobjToString(GATEWAY_IDENTIFIER);
 
 
             object obi = new
             {
                 command = data,
-                identifier = a
+                identifier = "asdfsadfsadf"
             };
             //var obi = stringifyJSON("channel");
 
 
-            var json = JsonSerializer.Serialize(obi);
-            Print($"[WSSClient]: Sending \n\n{json}\n\n", 0);
-            var buffer = new ArraySegment<byte>(Encoding.UTF8.GetBytes(json));
-            foreach (byte boot in buffer)
-                Print($"\n{boot:X2}", 0);
+            ///var json = JsonSerializer.Serialize(obi);
+            //var json = "ASDFASDFSAF";
+            //Print($"[WSSClient]: Sending \n\n{json}\n\n", 0);
+            var buffer = new ArraySegment<byte>(Encoding.UTF8.GetBytes(o.ToString()));
+            //foreach (byte boot in buffer)
+            //Print($"\n{boot:X2}", 0);
 
-
-            Print($"\n\n\n\n", 0);
+            int timeout = 10;
+            while (WSSClient.State != WebSocketState.Open) { Thread.Sleep(500); timeout--; if (timeout <= 0) { Print($"YOU DONE FUCKED UP TIMEOUT BITCH", 4); break; } }
+            //Print($"\n\n\n\n", 0);
             if (WSSClient.State == WebSocketState.Open)
                 WSSClient.SendAsync(buffer, WebSocketMessageType.Text, true, ctx);
             else
@@ -258,14 +273,20 @@ namespace ShimamuraBot
 
         public async Task Listen(CancellationToken ctx = default)
         {
-            if (!_connected) { Print($"[WSSClient]: Could not listen to socket, as it is not open.", 3); return; }
-
+            //if (!_connected) { Print($"[WSSClient]: Could not listen to socket, as it is not open.", 3); return; }
+            while(WSSClient.State != WebSocketState.Open) { Thread.Sleep(11); } 
             Print($"[WSSClient]: WSS connection to {WSS_HOST} Successful. Now listening...", 0);
 
             byte[] buffer = new byte[4096]; //1024 bytes IF the header Sec-Websocket-Maximum-Message-Size is detected, then that is the maximum size the buffer can be to prevent DDoSing.
+            WebSocketReceiveResult result;
             while (WSSClient.State == WebSocketState.Open && !ctx.IsCancellationRequested)
             {
-                WebSocketReceiveResult result = await WSSClient.ReceiveAsync(new ArraySegment<byte>(buffer), ctx);
+                try
+                {
+                    result = await WSSClient.ReceiveAsync(new ArraySegment<byte>(buffer), ctx);
+                } catch (Exception ex) {
+                    throw ex;
+                }
                 if (result.MessageType == WebSocketMessageType.Text)
                 {
                     string message = Encoding.UTF8.GetString(buffer, 0, result.Count);
@@ -277,9 +298,13 @@ namespace ShimamuraBot
                         //Task.Run(() => Subscribe("subscribe", false, cancellationToken));
                     }
                 } else if (result.MessageType == WebSocketMessageType.Close) {
-                    Print($"[WSSClient]: Remote {WSS_HOST} closed the socket", 1);
+                    string message = Encoding.UTF8.GetString(buffer, 0, result.Count);
+                    onMessage(message);
+                    Print($"[WSSClient]: Remote {WSS_HOST} closed the socket {result}\n {result.CloseStatus}\n {result.CloseStatusDescription}\n {result.MessageType}\n {result.EndOfMessage}\n", 1);
+                    return;
                 } else {
                     Print($"[WSSClient]: Unhandled Exception {result.MessageType.ToString()}", 3);
+                    if(WSSClient.State == WebSocketState.Closed) return;
                 }
             }
 
@@ -337,7 +362,7 @@ namespace ShimamuraBot
              */
         }
 
-        public async Task parseChatChannelMessage(string _sockMessage)
+        /*public async Task parseChatChannelMessage(string _sockMessage)
         { //come here if channel == ChatChannel, 
             if (!_sockMessage.Contains("\"ChatChannel\""))
                 return;
@@ -382,7 +407,7 @@ namespace ShimamuraBot
 [Socket]: {"identifier":"{\"channel\":\"EventLogChannel\",\"stream_id\":\"adachi91\"}","message":{"event":"StreamEvent","id":"3af57a80-bfa3-4fe8-98cd-c8e8ae496a3f","type":"ChatMessageReceived","text":"new_message","metadata":"{}","createdAt":"2023-05-01T18:47:01Z","updatedAt":"2023-05-01T18:47:01Z"}}
              */
 
-            dynamic jsonMsg = JsonSerializer.Deserialize<dynamic>(_sockMessage);
+        /*    dynamic jsonMsg = JsonSerializer.Deserialize<dynamic>(_sockMessage);
 
             //emotes used??
             Console.WriteLine("[{0}] {1}: {2}", jsonMsg.message.createdAt, jsonMsg.message.author.username, jsonMsg.message.text);
@@ -512,7 +537,7 @@ namespace ShimamuraBot
                 }
             }
             Console.WriteLine("Jobs done, zug zug");
-        }
+        }*/
 
         
     }

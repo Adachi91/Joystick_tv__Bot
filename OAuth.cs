@@ -7,6 +7,7 @@ using System.Text;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
+using System.ComponentModel.Design;
 
 namespace ShimamuraBot
 {
@@ -37,8 +38,7 @@ namespace ShimamuraBot
         /// <param name="_scope">Scope (optional) should be bot</param>
         public OAuthClient(string _host, string _client_id, string _client_secret, string _authorize_uri, string _token_uri, string _redirect_uri, string _scope = "ALLURBASES")
         {
-            if (!_host.StartsWith("https://"))
-            {
+            if (!_host.StartsWith("https://")) {
                 Print($"[OAuth]: Could not construct the OAuth class. The Scheme detected was not HTTPS", 3);
                 return;
             }
@@ -52,7 +52,6 @@ namespace ShimamuraBot
             Token_URI = new Uri($"{_host}{_token_uri}");
 
             Scope = _scope;
-
         }
 
 
@@ -60,28 +59,42 @@ namespace ShimamuraBot
         /// Generate a nounce "state" for comparison on callback to protect against MiTM attacks, however not required for loopback, still implemented.
         /// </summary>
         /// <returns></returns>
-        public static string Generatestate()
-        {
+        public static string Generatestate() {
             string chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
             Random rand = new Random();
             return new string(Enumerable.Repeat(chars, 32).Select(s => s[rand.Next(s.Length)]).ToArray());
         }
 
+        /// <summary>
+        ///  Checks to see if you have a valid token
+        /// </summary>
+        /// <returns>returns true if valid, false if not valid or expired</returns>
+        public static bool checkJWT() {
+            if (!string.IsNullOrEmpty(APP_JWT))
+                if (APP_JWT_EXPIRY - GetUnixTimestamp() >= 900)
+                    return true;
+                else
+                    return false;
+            else
+                return false;
+        }
 
         /// <summary>
         /// Send a POST request to the host's gateway to request a JWT using HTTPClient
         /// </summary>
         /// <param name="type">Type of grant. 1:authorization_code, 2:refresh_token</param>
-        public async void callmewhateverlater(int type)
-        {
-            //Can I please get WebClient back ; _ ;  - 2nd attempt
+        public async void callmewhateverlater(int type) {
+            //first let's do a few checks
+
+            if (checkJWT()) { Print($"[OAuth]: Already have a valid JWT. Not requesting a new one...", 2); return; }
+
             string grantType = "";
             if (type == 1) grantType = "authorization_code";
             else if (type == 2) grantType = "refresh_token";
-            else { Print($"[HTTPClient]: Invalid grant_type provided. The type must be 1:authorization or 2:refresh", 3); return; }
+            else { Print($"[OAuth]: Invalid grant_type provided. The type must be 1:authorization or 2:refresh", 3); return; }
 
             using (HttpClient hc = new HttpClient()) {
-                hc.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Basic", Convert.ToBase64String(Encoding.UTF8.GetBytes($"{CLIENT_ID}:{CLIENT_SECRET}")));
+                hc.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Basic", ACCESS_TOKEN);
                 hc.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
 
                 var emptybody = new StringContent("");

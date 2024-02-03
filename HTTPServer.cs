@@ -18,65 +18,83 @@ namespace ShimamuraBot
     internal class HTTPServer
     {
         private readonly HttpListener listener;
-        private bool _Started { get; set; } = false;
         private OAuthClient _OAuthPtr;
 
         private CancellationTokenSource cts = new CancellationTokenSource();
         private CancellationToken cancelToken;
 
         /// <summary>
-        /// Constructor, Creates new HttpListener, and sets Class obj ptr of OAuth
+        ///  Constrcuts a new HTTPListener client
         /// </summary>
+        /// <param name="OAuthPtr">Constructed OAuth class pointer</param>
         public HTTPServer(OAuthClient OAuthPtr) {
-                Print("[HTTPServer]: Constructed the HTTP Listener", 0);
+            cancelToken = cts.Token;
+            listener = new HttpListener();
+            listener.Prefixes.Add($"http://127.0.0.1:{LoopbackPort}/auth/");
+            _OAuthPtr = OAuthPtr;
 
-                listener = new HttpListener();
-                listener.Prefixes.Add($"http://127.0.0.1:{LoopbackPort}/auth/");
-                _OAuthPtr = OAuthPtr;
+            Print("[HTTPServer]: Constructed the HTTP Listener", 0);
         }
 
 
+        /// <summary>
+        ///  Checks if port is in use if not it will start the HTTPListener
+        /// </summary>
+        /// <returns></returns>
         public async Task<bool> Start() {
-            cancelToken = cts.Token;
-
             if (!await PortCheck())
                 Task.Run(() => StartAsync(_OAuthPtr, cancelToken));
+            else
+                return false;
 
-            while(!_Started) { //Dumbass way to wait for Raising the HTTPListener
+            /*while(!_Started) { //Dumbass way to wait for Raising the HTTPListener
                 if(listener.IsListening)
                     break;
                 
                 Thread.Sleep(10);
-            }
+            }*/
             return true;
         }
 
 
+        /// <summary>
+        /// Stop the HTTPServer client
+        /// </summary>
+        public void Stop()
+        {
+            if (!listener.IsListening) { Print($"[HTTPServer]: Server is not currently running", 2); return; }
+            cts.Cancel();
+        }
+
+
+        /// <summary>
+        ///  Attempt to see if port for loopback is in use currently.
+        /// </summary>
+        /// <returns>boolean</returns>
+        /// <exception cref="Exception"></exception>
         private async Task<bool> PortCheck()
         {
-            var port = LoopbackPort;
-            try
-            {
-                Print($"[HTTPServer]: Checking if port {port} is open", 0);
+            try {
+                Print($"[HTTPServer]: Checking if port {LoopbackPort} is open", 0);
                 using (TcpClient client = new TcpClient()) {
-                    IAsyncResult result = client.BeginConnect("127.0.0.1", port, null, null);
+                    IAsyncResult result = client.BeginConnect("127.0.0.1", LoopbackPort, null, null);
                     bool success = result.AsyncWaitHandle.WaitOne(TimeSpan.FromSeconds(1));
                     if (success) {
                         client.EndConnect(result);
                         client.Close();
-                        Print($"[HTTPServer]: The port {port} is being used by another program", 3);
+                        Print($"[HTTPServer]: The port {LoopbackPort} is being used by another program", 3);
                         return true;
                     }
                     client.Close();
-                    Print($"[HTTPServer]: {port} is usable", 0);
+                    Print($"[HTTPServer]: {LoopbackPort} is usable", 0);
                     return false;
                 }
             }
             //Always fail on exception, because I don't know shit about the port state.
             catch (SocketException ex) {
                 if (ex.SocketErrorCode == SocketError.ConnectionRefused) {
-                    Print($"[HTTPServer]: 127.0.0.1:{port} was refused. So assuming it's in use", 0);
-                    return true; //When is socketerror refusal in a non-usable state e.g. Program:Port (Fuck off) ??
+                    Print($"[HTTPServer]: 127.0.0.1:{LoopbackPort} was refused. So assuming it's in use", 0);
+                    return true;
                 }
                 throw new Exception($"[HTTPServer]: op 0x9D: I really don't know {ex}");
             } catch (Exception ex) {
@@ -85,13 +103,14 @@ namespace ShimamuraBot
             }
         }
 
+
         /// <summary>
-        /// Open the URI to ask user for Authenization of resources.
+        /// Open the URI to ask user for Authorization of resources.
         /// </summary>
-        /// <param name="url">Complete URI including endpoint, and GET queries.</param>
+        /// <param name="url">Complete HOST URI</param>
         /// <exception cref="Exception"></exception>
         public void openBrowser(string url) { //Code from ODIC Sample Code on Github.
-            Print($"Opening {url.Substring(0, 19)} in your webbrowser for authorization", 1);
+            Print($"Opening {HOST} in your webbrowser for authorization", 1);
             try {
                 Process.Start(url);
             } catch {
@@ -116,68 +135,63 @@ namespace ShimamuraBot
         //Currently thread blocking, so yeah mainloop idea might not have been so dumb.
 
         /// <summary>
-        /// Loopback listener, Main Thread -> Listener -> Data -> StopListening -> Send Main Thread.InstanceEvents
+        ///  Listens for HTTP events on localhost:port
         /// </summary>
-        /// <param name="OAuthPtr">Pointer to Constructed OAuth Class</param>
-        /// <returns></returns>
+        /// <param name="OAuthPtr">Pointer to constructed OAuth Class</param>
+        /// <param name="Token">Cancellation Token</param>
+        /// <returns>null</returns>
         private async Task StartAsync(OAuthClient OAuthPtr, CancellationToken Token)
         {
             listener.Start();
-            _Started = true;
-            Print($"[HTTPServer]: Started on http://127.0.0.1:{Program.LoopbackPort}/auth/", 1);
-            
+            Print($"[HTTPServer]: Started on http://127.0.0.1:{LoopbackPort}/auth/", 1);
 
-            while (!Token.IsCancellationRequested) {
-                try
-                {
-                    var context = await listener.GetContextAsync();
-                    var request = context.Request;
-                    var requestBody = await new StreamReader(request.InputStream).ReadToEndAsync(Token);
+            try
+            {
+                Task<HttpListenerContext> context = listener.GetContextAsync();
+                Task cancelRequest = Task.Delay(Timeout.Infinite, Token);
+                Task taskDone = await Task.WhenAny(context, cancelRequest);
 
-                    if (!string.IsNullOrEmpty(request.QueryString["state"]))
-                        if (request.QueryString["state"] == OAuthPtr.State)
-                            if (!string.IsNullOrEmpty(request.QueryString["code"]))
-                                OAuthPtr.OAuthCode = request.QueryString["code"];
-                            else
-                                Print("[HTTPServer]: Unable to retrieve code for OAuth flow", 3);
+                if (taskDone == cancelRequest) { Print($"[HTTPServer]: Cancellation received. Shut down Complete", 1); listener.Stop(); return; }
+
+                var ctxx = await context;
+                var request = ctxx.Request;
+                var requestBody = await new StreamReader(request.InputStream).ReadToEndAsync(Token);
+
+                if (!string.IsNullOrEmpty(request.QueryString["state"]))
+                    if (request.QueryString["state"] == OAuthPtr.State)
+                        if (!string.IsNullOrEmpty(request.QueryString["code"]))
+                            OAuthPtr.OAuthCode = request.QueryString["code"];
                         else
-                            Print("[HTTPServer]: The nounce returned by the Host was not a match! MITM detected", 3); //I honestly do not think this can ever proc, as it's TLS and even evil twin would not be able to pass it.
+                            Print($"[HTTPServer]: Unable to Retrieve Authorization code from {HOST}", 3);
+                    else
+                        Print($"[HTTPServer]: The nounce returned by {HOST} was not a match!", 3); //I honestly do not think this can ever proc, as it's TLS and even evil twin would not be able to pass it.
 
 
-                    var response = context.Response;
-                    response.ContentType = "text/html";
-                    var responseBytes = Encoding.UTF8.GetBytes("<!DOCTYPE html><html lang=\"en\"><head><title>Authorization Successful</title><style>html,body{background-color:#1c1b22;color:#fff;} h1 {margin:auto; text-align:center; padding-top:5rem;}</style></head><body><h1>Request was Successful. You may close this page now.</h1></body></html>");
-                    response.OutputStream.Write(responseBytes, 0, responseBytes.Length);
-                    response.Close();
+                var response = ctxx.Response;
+                response.ContentType = "text/html";
+                var responseBytes = Encoding.UTF8.GetBytes("<!DOCTYPE html><html lang=\"en\"><head><title>Authorization Successful</title><style>html,body{background-color:#1c1b22;color:#fff;} h1 {margin:auto; text-align:center; padding-top:5rem;}</style></head><body><h1>Request was Successful. You may close this page now.</h1></body></html>");
+                response.OutputStream.Write(responseBytes, 0, responseBytes.Length);
+                response.Close();
 
-                    if (response.StatusCode == 200) {
-                        Print($"[HTTPServer]: Got OAuth code from {HOST}", 0);
-                        Print($"[HTTPServer]: Shutting down..", 0);
-                        cts.Cancel();
-                    }
+                if (response.StatusCode == 200)
+                {
+                    Print($"[HTTPServer]: Got OAuth code from {HOST}", 0);
+                    cts.Cancel();
+                }
 
-                } catch (HttpListenerException ex) {
-                    if (ex.ErrorCode == 995) {
-                        Print($"[HTTPServer]: Has been stopped", 1);
-                        return;
-                    }
-                    Print($"[HTTPServer]: Not 995 ErrorCode. {ex}", 3);
-                } catch (Exception ex) { Print($"[HTTPServer]: {ex}", 3); }
             }
+            catch (HttpListenerException ex) {
+                if (ex.ErrorCode == 995) { Print($"[HTTPServer]: Stopped unexpectedly", 2); return; }
+                Print($"[HTTPServer]: Stopped unexpectedly. Error: {ex}", 3);
+            }
+            catch (Exception ex) { Print($"[HTTPServer]: Stopped unexpectedly. Error: {ex}", 3); }
 
-            Print($"[HTTPServer]: Shutting down", 1);
+            Print($"[HTTPServer]: Successfully received Authorization from {HOST}. Job Complete Shutting Down listener...", 1);
             listener.Stop();
             Task.Delay(1000).Wait();
 
-            OAuthPtr.callmewhateverlater(1);
-        }
 
-        /// <summary>
-        /// Stop the HTTPServer client
-        /// </summary>
-        public void Stop() {
-            if(!_Started) { Print($"[HTTPServer]: Server is not currently running", 2); return; }
-            cts.Cancel();
+            OAuthPtr.callmewhateverlater(1);
         }
     }
 }

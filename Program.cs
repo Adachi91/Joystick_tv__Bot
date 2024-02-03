@@ -15,6 +15,8 @@ namespace ShimamuraBot
 {
     class Program
     {
+        //if you decode it let me know -adachi
+        //public const string EASTER_EGG = "GAJ9MDCDIDEAHDTC9D9DEAADTCEAXCHDLAGDEAPC9DFDXCVCWCHDQAJ9HDTC9D9DEAADTCEASBLAADEAUCCDFDVCXCJDTCBDEAHDCDBDXCVCWCHDQAJ9QCIDHDEABDCDQCCDSCMDEARCPCBDEAGDPCJDTCEAADTCEABDCDKDQAJ9SBLAADEAWCCD9DSCXCBDVCEAIDDDEAPCEA9DXCVCWCHDQAJ9RCWCPCGDXCBDVCEACDIDHDEAHDWCTCEASCPCFDZCBDTCGDGDEAXCBDGDXCSCTCQAJ9RCPCIDGDTCEABDCDQCCDSCMDEARCPCBDEAGDPCJDTCEAADTCSAJ9GA";
         public static int LoopbackPort = 8087;
 
         public static string HOST;
@@ -22,7 +24,7 @@ namespace ShimamuraBot
         public static string CLIENT_SECRET;
         public static string WSS_HOST;
         public static string WSS_GATEWAY;
-        //public static string ACCESS_TOKEN; // I use APP_JWT identifier to find the JWT, expiry, and refresh tokens faster
+        public static string ACCESS_TOKEN; // I use APP_JWT identifier to find the JWT, expiry, and refresh tokens faster
         public static object GATEWAY_IDENTIFIER;
         public static string APP_JWT;
         public static long APP_JWT_EXPIRY;
@@ -191,19 +193,13 @@ namespace ShimamuraBot
                         MainLoop.Stop();
                         break;
                     case "start" or "run": //TOSTAY
-                        if(!string.IsNullOrEmpty(APP_JWT)) {
-                            if(GetUnixTimestamp() - APP_JWT_EXPIRY <= 0) {
-                                WSS_GATEWAY = $"{WSS_HOST}?token={APP_JWT}";
-                                wss.Connect();
-                                Task.Run(() => wss.Listen());
-                                wss.sendMessage("subscribe");
-                            } else {
-                                server.Start();
-                                oAuth.State = OAuthClient.Generatestate();
-                                server.openBrowser(oAuth.Auth_URI.ToString() + $"?client_id={CLIENT_ID}&scope=bot&state={oAuth.State}");
-                            }
+                        if(OAuthClient.checkJWT()) {
+                            WSS_GATEWAY = $"{WSS_HOST}?token={ACCESS_TOKEN}";
+                            wss.Connect();
+                            Task.Run(() => wss.Listen());
+
+                            //wss.sendMessage("subscribe");
                         } else {
-                            //draw the rest of the fucking owl.
                             server.Start();
                             oAuth.State = OAuthClient.Generatestate();
                             server.openBrowser(oAuth.Auth_URI.ToString() + $"?client_id={CLIENT_ID}&scope=bot&state={oAuth.State}");
@@ -218,42 +214,30 @@ namespace ShimamuraBot
                         var t = Task.Run(() => {
                             oAuth.callmewhateverlater(1);
                         });
-                        events.Print("Idk - dumped oauth code to oauth2.txt", 4);
+                        Print("Idk - dumped oauth code to oauth2.txt", 4);
                         //TODO: settings
-                        break;
-                    case "fun"://PRUNE?
-                        //foreach (var fuckyou in MainThread.FiveMillionTimers)
-                        //Console.WriteLine($"fuckyou.key {fuckyou.Key} and fuckyou.value {fuckyou.Value}");
-                        MainLoop.Start();
-                        //Console.WriteLine($"Result of Millionsooftimerthing is {MainThread.FiveMillionTimers}");
-                        //TODO: Setup things like YT, soundcloud, vemo video play commands, and other stuff
                         break;
                     case "sendit" or "oauth"://PRUNE  AFTER FLOW HAS BEEN COMPLETE.
                         oAuth.State = OAuthClient.Generatestate(); // FIX THIS SHIT PELASE
                         server.openBrowser(oAuth.Auth_URI.ToString() + $"?client_id={CLIENT_ID}&scope=bot&state={oAuth.State}");
                         break;
                     case "listen"://PRUNE AFTER FLOW HAS BEEN COMPLETE.
-                        //server = new HTTPServer(oAuth);
                         server.Start();
-                        ///events.Print($"Server should have started thingy {asdf}", 0);
-                        ////server.StartAsync(oAuth);
                         break;
                     case "stoplisten"://PRUNE  AFTER FLOW HAS BEEN COMPLETE.
-                        //MainLoop.Touchy(); //why are you like this
                         server.Stop();
                         break;
                     case "vcat"://PRUNE
                         vCat.Redeem("meow");
                         break;
                     case "help"://Fix
-                        events.Print($"help - IT DISPLAYS THIS FUCKING MESSAGE", 1);
-                        events.Print($"listen - STARTS LISTENING ON THE TEMPORARY FUCKING SERVER OF HTTPLISTENER", 1);
-                        events.Print($"stoplisten - STOP THE STUPID FUCKING HTTPLISTENER", 1);   
-                        events.Print($"fun - IDK MASTURBATE?", 1);
-                        events.Print($"quit/exit/something - IT EXPLODES", 1);
+                        Print($"listen - STARTS LISTENING ON THE TEMPORARY FUCKING SERVER OF HTTPLISTENER", 1);
+                        Print($"stoplisten - STOP THE STUPID FUCKING HTTPLISTENER", 1);   
+                        Print($"fun - IDK MASTURBATE?", 1);
+                        Print($"quit/exit/something - IT EXPLODES", 1);
                         break;
                     default:
-                        events.Print("type help", 1);
+                        Print("type help", 1);
                         break;
                 }
             }
