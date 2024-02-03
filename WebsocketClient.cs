@@ -3,9 +3,12 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Net.WebSockets;
-using System.Text.Json;
+//using System.Text.Json;
 using System.Collections.Generic;
 using System.Text.Encodings.Web;
+using System.Runtime.InteropServices.JavaScript;
+using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 
 namespace ShimamuraBot
 {
@@ -27,70 +30,295 @@ namespace ShimamuraBot
          * 1003 indicates that an endpoint is terminating the connection because it has received a type of data it cannot accept (e.g., an endpoint that understands only text data MAY send this if it receives a binary message).
          */
 
-        //private void Print(string msg, int lvl) => events.Print(msg, lvl);
-        private Uri _uri { get; set; }
         public bool _connected { get; private set; }
         public bool isExiting { get; set; }
         /// <summary>
         /// Creates an instance of the events class to construct messages, supplying the bot id, uuid, and currently stream_id (ew)
         /// </summary>
         public events _events;
-        private ClientWebSocket _webSocket;
-        private bool debugging = true;
+        private ClientWebSocket WSSClient;
+
+        public Dictionary<DateTime, Tuple<string, string>> History = new Dictionary<DateTime, Tuple<string, string>>();
+        private bool saveHistory { get; set; }
+
+        private CancellationTokenSource cts = new CancellationTokenSource();
+        private CancellationToken ctx;
 
 
         /// <summary>
         /// Constructs the WebSocket client and Events.MessageConstructor
         /// </summary>
-        /// <param name="uri">The WSS endpoint</param>
-        /// <param name="bot_id">Bot Username</param>
-        /// <param name="bot_uuid">Bot UUID</param>
-        /// <param name="bot_token">Bot Token</param>
-        /// <param name="stream_id">Stream usernname</param>
-        public WebsocketClient(Uri uri, string bot_id, string bot_uuid, string bot_token, string stream_id="")
+        public WebsocketClient(bool _history = false)
         {
-            _webSocket = new ClientWebSocket();
-            _webSocket.Options.AddSubProtocol("wss");
-            _webSocket.Options.AddSubProtocol("actioncable-v1-json");
-            _webSocket.Options.AddSubProtocol("actioncable-unsupported");
+            if (_history) saveHistory = true;
 
-            _uri = uri;
-            _events = new events(bot_id, bot_uuid, bot_token, stream_id);
+            ctx = cts.Token;
+
+            WSSClient = new ClientWebSocket();
+            WSSClient.Options.AddSubProtocol("wss");
+            WSSClient.Options.AddSubProtocol("actioncable-v1-json");
+            WSSClient.Options.AddSubProtocol("actioncable-unsupported");
+
+
+            //_events = new events(bot_id, bot_uuid, bot_token, stream_id);
         }
 
-        public async Task Connect(CancellationToken cancellationToken = default)
+
+        public async Task Connect()
         {
+            Print($"[WSSClient]: Attempting to connect to {WSS_HOST}", 0);
             try {
-                await _webSocket.ConnectAsync(_uri, cancellationToken);
+                await WSSClient.ConnectAsync(new Uri(WSS_GATEWAY), ctx);
                 _connected = true;
             } catch (Exception ex) {
-                Console.WriteLine("Connection Error: {0}", ex);
+                Print($"[WSSClient]: Connection Error {ex}", 3);
             }
         }
+
+
+        //
+        public void Close() {
+            cts.Cancel();
+        }
+
 
         /// <summary>
         /// async task to dispatch CloseAsync on WSSClient
         /// </summary>
         /// <returns>nothing</returns>
-        public async Task Disconnect()
+        private async Task Disconnect()
         {
-            await _webSocket.CloseAsync(WebSocketCloseStatus.NormalClosure, "", CancellationToken.None);
-            while(_webSocket.State != WebSocketState.Closed)
+            _connected = false;
+
+            if (WSSClient.State == WebSocketState.Closed) {
+                Print($"[WSSClient]: The socket is already closed to {WSS_HOST}", 3);
+                return;
+            }
+
+            await WSSClient.CloseAsync(WebSocketCloseStatus.NormalClosure, "Normal Closure", ctx);
+            while(WSSClient.State != WebSocketState.Closed)
                 Thread.Sleep(100);
 
-            _connected = false;
-            Console.WriteLine("[Socket]: Connection shutdown gracefully. Please come again.");
+            Print($"[WSSClient]: Socket shutdown gracefully. Please come again.", 1);
         }
 
 
 
-        public object Parser(string msg)
+        public class JSONDataStruct {
+            public string? asdf { get; set; }
+            public string? payload { get; set; }
+        }
+
+
+        public void onMessage(string data) {
+            //var msg = JsonSerializer.Deserialize<JSONDataStruct>(data);
+
+            dynamic msg = JsonSerializer.Deserialize<dynamic>(data);
+
+            Print($"[WSS.onMessage]: {msg.identifier} {msg.message}", 0);
+
+            dynamic msg2 = JsonSerializer.Deserialize<dynamic>(msg.message);
+
+            Print($"[WSS.onMessage]: {msg2.type} --- {msg2}", 0);
+        }
+
+        public void FidgetyStuff(string msg) {
+            switch (msg.ToLower())
+            {
+                case "ping":
+                    break;
+                case "test":
+                    sendMessage("APPLES");
+                    break;
+                case "yeet":
+                    //vCat msg
+                    break;
+                case "duck":
+                    //vCat msg
+                    break;
+                default:
+                    break;
+            }
+        }
+
+        private string stringifyJSON(string data, object obj2 = null, object obj3 = null)
         {
-            Object obj = new object { };
-            //have fun asshole.
+            var json = JsonSerializer.Serialize(obj2);
+            var gateway = JsonSerializer.Serialize(GATEWAY_IDENTIFIER);
 
-            return obj;
+            Print($"{gateway}", 0);
+
+            using(JsonDocument doc = JsonDocument.Parse(gateway))
+            {
+                var root = doc.RootElement;
+
+                var ttem = new
+                {
+                    command = data, //"command":"data" //\\u2
+                    identifier = root
+                };
+
+                var resp = JsonSerializer.Serialize(ttem);
+
+                Print($"{resp}", 0);
+                Environment.Exit(0);
+                return resp;
+            }
+            return null;
         }
+
+        public string JSONobjToString(string type)
+        {
+
+
+            /*object asdf = new
+            {
+                Name = "john",
+                Age = 99,
+                Sex = "Male",
+                Addresses = fXas
+            };*/
+
+
+            string json = JsonSerializer.Serialize(obj);
+
+
+            //int strlen = "Addresses\":".Length;
+            //int fuck = json.IndexOf("Addresses\":");
+            //int strlenyourassole = (json.Length - fuck); // + 1; //123456789 5 
+
+            //string moo = json.Substring(fuck + strlen, strlenyourassole - strlen);
+
+
+            //var fuck = json.Split("Addresses\":", 2, StringSplitOptions.RemoveEmptyEntries); //split string up to the json delimiter
+            //var fuck = "";
+
+            //switch()
+
+            
+
+            var fuckit = json.Replace("}}", "}"); //remove trailing ends
+            var fuckitbuckit = fuckit.Replace("\"", "\\\""); //replace all qoutations with escaped qoutations to stringify
+            var fuckastep = $"\"{fuckitbuckit}\""; //then wrap that shit in qoutations
+
+
+            //Print($"First index: {{fuck[1]}} and split 2: {fuckastep}", 3);
+
+
+            switch (type)
+            {
+                case "gateway":
+
+                    break;
+                default:
+                    return null;
+                    break;
+            }
+
+
+            //Print($"{json}", 0);
+
+            //return fuckastep;
+        }
+
+
+        public void sendMessage(string data) {
+
+            //var tmp = JsonSerializer.Serialize(GATEWAY_IDENTIFIER);
+            //var temp2 = $"\"{tmp.Replace("\"", "\\\"")}\"";
+
+            JArray jsonarray = new JArray();
+
+
+            var a = JSONobjToString(GATEWAY_IDENTIFIER);
+
+
+            object obi = new
+            {
+                command = data,
+                identifier = a
+            };
+            //var obi = stringifyJSON("channel");
+
+
+            var json = JsonSerializer.Serialize(obi);
+            Print($"[WSSClient]: Sending \n\n{json}\n\n", 0);
+            var buffer = new ArraySegment<byte>(Encoding.UTF8.GetBytes(json));
+            foreach (byte boot in buffer)
+                Print($"\n{boot:X2}", 0);
+
+
+            Print($"\n\n\n\n", 0);
+            if (WSSClient.State == WebSocketState.Open)
+                WSSClient.SendAsync(buffer, WebSocketMessageType.Text, true, ctx);
+            else
+                Print($"[WSSClient]: RACE CONDITION, TIME TO DIE MOTHER FUCKERS", 4);
+        }
+
+
+        public async Task Listen(CancellationToken ctx = default)
+        {
+            if (!_connected) { Print($"[WSSClient]: Could not listen to socket, as it is not open.", 3); return; }
+
+            Print($"[WSSClient]: WSS connection to {WSS_HOST} Successful. Now listening...", 0);
+
+            byte[] buffer = new byte[4096]; //1024 bytes IF the header Sec-Websocket-Maximum-Message-Size is detected, then that is the maximum size the buffer can be to prevent DDoSing.
+            while (WSSClient.State == WebSocketState.Open && !ctx.IsCancellationRequested)
+            {
+                WebSocketReceiveResult result = await WSSClient.ReceiveAsync(new ArraySegment<byte>(buffer), ctx);
+                if (result.MessageType == WebSocketMessageType.Text)
+                {
+                    string message = Encoding.UTF8.GetString(buffer, 0, result.Count);
+                    onMessage(message);
+                    continue;
+
+                    if (message.Contains("{\"type\":\"welcome\"}")) {
+                        //Task.Run(() => Subscribe("connect", false, cancellationToken));
+                        //Task.Run(() => Subscribe("subscribe", false, cancellationToken));
+                    }
+                } else if (result.MessageType == WebSocketMessageType.Close) {
+                    Print($"[WSSClient]: Remote {WSS_HOST} closed the socket", 1);
+                } else {
+                    Print($"[WSSClient]: Unhandled Exception {result.MessageType.ToString()}", 3);
+                }
+            }
+
+            if(ctx.IsCancellationRequested) {
+                Print($"[WSSClient]: Closed connection to {WSS_HOST}", 1);
+                Disconnect();
+                return;
+            }
+
+            if (WSSClient.State != WebSocketState.Open)
+                Print($"[WSSClient]: Socket closed remotely from {WSS_HOST}", 3);
+
+            Disconnect(); //if it's not already closed properly
+        }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -234,7 +462,7 @@ namespace ShimamuraBot
                     //Console.WriteLine("-------------");
                     buffer = new ArraySegment<byte>(Encoding.UTF8.GetBytes(testy[i]));
                     try {
-                        await _webSocket.SendAsync(buffer, WebSocketMessageType.Text, true, CancellationToken.None);
+                        await WSSClient.SendAsync(buffer, WebSocketMessageType.Text, true, CancellationToken.None);
                     } catch (Exception ex) { Console.WriteLine(ex); }
                     //Thread.Sleep(150);
                 }
@@ -248,11 +476,10 @@ namespace ShimamuraBot
             foreach (var messy in msg)
             {
                 var json = JsonSerializer.Serialize(messy, options);
-                if(debugging)
-                    Console.WriteLine("[Client]: {0}", json);
+
                 var buffer = new ArraySegment<byte>(Encoding.UTF8.GetBytes(json));
                 try {
-                    await _webSocket.SendAsync(buffer, WebSocketMessageType.Text, true, cancellationToken);
+                    await WSSClient.SendAsync(buffer, WebSocketMessageType.Text, true, cancellationToken);
                 } catch (Exception ex) {
                     Console.WriteLine($"Shit exploded in the Subscribe Method - {ex}");
                 }
@@ -275,12 +502,11 @@ namespace ShimamuraBot
             foreach (var THEGODDAMNMESSAGETOSENDONEATATIMEORSOMETHINGIDONTFUCKINGKNOWOK in msg)
             {
                 var json = JsonSerializer.Serialize(THEGODDAMNMESSAGETOSENDONEATATIMEORSOMETHINGIDONTFUCKINGKNOWOK, options);
-                if (debugging)
-                    Console.WriteLine("[Client]: {0}", json);
+                
                 var buffer = new ArraySegment<byte>(Encoding.UTF8.GetBytes(json));
 
                 try {
-                    await _webSocket.SendAsync(buffer, WebSocketMessageType.Text, true, CancellationToken.None);
+                    await WSSClient.SendAsync(buffer, WebSocketMessageType.Text, true, CancellationToken.None);
                 } catch (Exception ex) {
                     Console.WriteLine($"Shit exploded in the Unsubscribe method, idk kill it or something :: {ex}");
                 }
@@ -288,36 +514,6 @@ namespace ShimamuraBot
             Console.WriteLine("Jobs done, zug zug");
         }
 
-        public async Task Listen(CancellationToken cancellationToken = default)
-        {
-            if (!_connected)
-                throw new InvalidOperationException("Listener: The websocket was not open.");
-
-            byte[] buffer = new byte[4096]; //1024 bytes IF the header Sec-Websocket-Maximum-Message-Size is detected, then that is the maximum size the buffer can be to prevent DDoSing.
-            while (_webSocket.State == WebSocketState.Open && !cancellationToken.IsCancellationRequested)
-            {
-                WebSocketReceiveResult result = await _webSocket.ReceiveAsync(new ArraySegment<byte>(buffer), cancellationToken);
-                if (result.MessageType == WebSocketMessageType.Text)
-                {
-                    string message = Encoding.UTF8.GetString(buffer, 0, result.Count);
-                    //if (!message.Contains("ping"))
-                        Console.WriteLine("[Socket]: {0}\r\n", message);
-
-                    if (message.Contains("{\"type\":\"welcome\"}"))
-                    {
-                        //Task.Run(() => Subscribe("connect", false, cancellationToken));
-                        //Task.Run(() => Subscribe("subscribe", false, cancellationToken));
-                    }
-                } else if (result.MessageType == WebSocketMessageType.Close) { 
-                    
-                } else {
-                    Console.WriteLine("Invalid WebSocketMessageType: {0}", result.MessageType.ToString());
-                }
-            }
-
-            if (_webSocket.State != WebSocketState.Open)
-                Console.WriteLine("[Socket]: The connection was forcefully closed. [{0}]", _webSocket.State.ToString());
-            _connected = false;
-        }
+        
     }
 }

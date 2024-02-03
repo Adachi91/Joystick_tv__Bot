@@ -19,7 +19,6 @@ namespace ShimamuraBot
     {
         private readonly HttpListener listener;
         private bool _Started { get; set; } = false;
-        //private void Print(string msg, int lvl) => events.Print(msg, lvl);
         private OAuthClient _OAuthPtr;
 
         private CancellationTokenSource cts = new CancellationTokenSource();
@@ -169,6 +168,8 @@ namespace ShimamuraBot
             Print($"[HTTPServer]: Shutting down", 1);
             listener.Stop();
             Task.Delay(1000).Wait();
+
+            OAuthPtr.callmewhateverlater(1);
         }
 
         /// <summary>

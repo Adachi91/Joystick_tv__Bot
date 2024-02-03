@@ -28,6 +28,9 @@ namespace ShimamuraBot
         public static long APP_JWT_EXPIRY;
         public static string APP_JWT_REFRESH;
         public static string ENVIRONMENT_PATH;
+
+        public const string HISTORY_PATH = @"shimaura.log";
+        public static bool LOGGING_ENABLED;
         
 
         #region MainLoopMultiThreading_TODO
@@ -140,7 +143,7 @@ namespace ShimamuraBot
             );
 
             server = new HTTPServer(oAuth);
-
+            WebsocketClient wss = new WebsocketClient();
 
             if (!MainLoop.Running()) MainLoop.Run();
             Console.Clear();
@@ -168,6 +171,7 @@ namespace ShimamuraBot
             ///events.Print($"[.env]: WSS: {WSS_HOST}", 0);
             ///events.Print($"[.env]: Token: {ACCESS_TOKEN}", 0);
             ///events.Print($"[.env]: Gateway: {GATEWAY_IDENTIFIER}", 0);
+            ///events.Print($"[.env]: Refresh: {APP_JWT_REFRESH}", 0);
             events.Print($"[environment]: Successfully loaded environment file.", 1);
 
             while (MainLoop.Running()) {
@@ -178,13 +182,36 @@ namespace ShimamuraBot
                 {
                     case "":
                         break;
-                    case "exit" or "quit" or "stop":
+                    case "fuck":
+                        //wss.bakeacake(new { });
+                        Print($"ff", 0);
+                        break;
+                    case "exit" or "quit":
                         //running = false;
                         MainLoop.Stop();
                         break;
                     case "start" or "run": //TOSTAY
-                        events.Print($"The circle is complete bitch, {oAuth.OAuthCode.Substring(4, 10)}", 0);
-                        //check if we have a valid token or refreshable token, do complete OAuth flow.
+                        if(!string.IsNullOrEmpty(APP_JWT)) {
+                            if(GetUnixTimestamp() - APP_JWT_EXPIRY <= 0) {
+                                WSS_GATEWAY = $"{WSS_HOST}?token={APP_JWT}";
+                                wss.Connect();
+                                Task.Run(() => wss.Listen());
+                                wss.sendMessage("subscribe");
+                            } else {
+                                server.Start();
+                                oAuth.State = OAuthClient.Generatestate();
+                                server.openBrowser(oAuth.Auth_URI.ToString() + $"?client_id={CLIENT_ID}&scope=bot&state={oAuth.State}");
+                            }
+                        } else {
+                            //draw the rest of the fucking owl.
+                            server.Start();
+                            oAuth.State = OAuthClient.Generatestate();
+                            server.openBrowser(oAuth.Auth_URI.ToString() + $"?client_id={CLIENT_ID}&scope=bot&state={oAuth.State}");
+                        }
+                        break;
+                    case "stop":
+                        Print($"[MainThread]: Attempting to close socket", 0);
+                            wss.Close();
                         break;
                     case "config"://ehhhhhhhh drake this one
                         //File.WriteAllText("oAuth2.txt", oAuth.OAuthCode);

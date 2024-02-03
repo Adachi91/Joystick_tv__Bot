@@ -105,7 +105,7 @@ namespace ShimamuraBot
                     break;
                 case 4:
                     Random rand = new Random();
-                    Console.WriteLine($"If you're seeing this then somehow, somewhere in this vast universe someone invoked the wrath of Hel▲6#╒e¢◄e↕Y8AéP╚67/Y1R\\6xx9/5Ωφb198 . . . . . {(Death)Enum.GetValues(typeof(Death)).GetValue(rand.Next(Enum.GetValues(typeof (Death)).Length))}");
+                    Console.WriteLine($" [Death]{ctx[0]}: If you're seeing this then somehow, somewhere in this vast universe someone invoked the wrath of Hel▲6#╒e¢◄e↕Y8AéP╚67/Y1R\\6xx9/5Ωφb198 . . . . . {(Death)Enum.GetValues(typeof(Death)).GetValue(rand.Next(Enum.GetValues(typeof (Death)).Length))}\n{ctx[1]}");
                     break;
                 default: Console.WriteLine($"I don't even want to know.");
                     break;

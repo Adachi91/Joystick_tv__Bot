@@ -17,12 +17,12 @@ namespace ShimamuraBot
         /// <exception cref="Exception"></exception>
         public static void load(string fp)
         {
-            if (!File.Exists(fp))
-                throw new Exception("Could not find the environment file.");
-
             string tmp = null; //hold the long in a string for this type of switch to work.
+            string _logging = null;
             foreach (var line in File.ReadAllLines(fp)) {
-                var split = line.Split('=', StringSplitOptions.RemoveEmptyEntries);
+                var split = line.Split('=', 2, StringSplitOptions.RemoveEmptyEntries);
+                //int a = line.IndexOf('=');
+                //var split = line.Split()
 
                 if (split.Length != 2) continue;
 
@@ -36,7 +36,8 @@ namespace ShimamuraBot
                     "WSS_HOST" => WSS_HOST = split[1],
                     "JWT" => APP_JWT = split[1],
                     "JWT_REFRESH" => APP_JWT_REFRESH = split[1],
-                    "JWT_EXPIRE" => tmp = split[1],
+                    "JWT_EXPIRE" => tmp = split[1], //TODO extract from JWT and delete this entry.
+                    "LOGGING" => _logging = split[1],
                     _ => throw new Exception("The Enviroment Keys in are not structured properly in the .env file\nThe minimum is required\nHOST=HOST_URL\nCLIENT_ID=YOUR_CLIENT_ID\nCLIENT_SECRET=YOUR_CLIENT_SECRET\nWSS_HOST=THE_WSS_ENDPOINT\n")
                 };
             }
@@ -47,13 +48,14 @@ namespace ShimamuraBot
             GATEWAY_IDENTIFIER = new { channel = "GatewayChannel" };
             //WSS_GATEWAY = $"{WSS_HOST}?token={ACCESS_TOKEN}"; //this needs to be set where JWT is handled.
             if (!string.IsNullOrEmpty(tmp)) APP_JWT_EXPIRY = Convert.ToInt64(tmp);
+            if(!string.IsNullOrEmpty(_logging)) LOGGING_ENABLED = Convert.ToBoolean(_logging);
         }
 
         /// <summary>
         /// Writes Token information to the environment file if it is already acquired (Requires full OAuth flow first)
         /// </summary>
         /// <param name="fp">The destination of the environment file</param>
-        public static void write(string fp)
+        public static void write(string fp, bool logging = false)
         {
             bool JWT_SET = false;
 
@@ -66,7 +68,9 @@ namespace ShimamuraBot
                 } else if (env[i].StartsWith("JWT_REFRESH=")) {
                     env[i] = "JWT_REFRESH=" + APP_JWT_REFRESH;
                 } else if (env[i].StartsWith("JWT_EXPIRE=")) {
-                    env[i] = "JWT_EXPIRE" + APP_JWT_EXPIRY.ToString();
+                    env[i] = "JWT_EXPIRE=" + APP_JWT_EXPIRY.ToString();
+                } else if (env[i].StartsWith("LOGGING=")) {
+                    env[i] = "LOGGING=" + logging;
                 }
             }
 
@@ -74,6 +78,7 @@ namespace ShimamuraBot
                 env.Add("JWT=" + APP_JWT);
                 env.Add("JWT_REFRESH=" + APP_JWT_REFRESH);
                 env.Add("JWT_EXPIRE=" + APP_JWT_EXPIRY.ToString());
+                env.Add("LOGGING=" + logging);
             }
 
             File.WriteAllLines(fp, env);
