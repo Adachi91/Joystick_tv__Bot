@@ -1,17 +1,12 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Collections.Specialized;
 using System.Diagnostics;
 using System.IO;
-using System.Linq;
 using System.Net;
 using System.Net.Sockets;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
-//using System.Net.Http;
-//using System.Net.Http.Headers;
 
 namespace ShimamuraBot
 {
@@ -47,12 +42,6 @@ namespace ShimamuraBot
             else
                 return false;
 
-            /*while(!_Started) { //Dumbass way to wait for Raising the HTTPListener
-                if(listener.IsListening)
-                    break;
-                
-                Thread.Sleep(10);
-            }*/
             return true;
         }
 
@@ -60,8 +49,7 @@ namespace ShimamuraBot
         /// <summary>
         /// Stop the HTTPServer client
         /// </summary>
-        public void Stop()
-        {
+        public void Stop() {
             if (!listener.IsListening) { Print($"[HTTPServer]: Server is not currently running", 2); return; }
             cts.Cancel();
         }
@@ -72,8 +60,7 @@ namespace ShimamuraBot
         /// </summary>
         /// <returns>boolean</returns>
         /// <exception cref="Exception"></exception>
-        private async Task<bool> PortCheck()
-        {
+        private async Task<bool> PortCheck() {
             try {
                 Print($"[HTTPServer]: Checking if port {LoopbackPort} is open", 0);
                 using (TcpClient client = new TcpClient()) {

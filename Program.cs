@@ -24,14 +24,14 @@ namespace ShimamuraBot
         public static string CLIENT_SECRET;
         public static string WSS_HOST;
         public static string WSS_GATEWAY;
-        public static string ACCESS_TOKEN; // I use APP_JWT identifier to find the JWT, expiry, and refresh tokens faster
+        public static string ACCESS_TOKEN; // B64 token
         public static object GATEWAY_IDENTIFIER;
-        public static string APP_JWT;
+        public static string APP_JWT; //bearer interact outside of message/events
         public static long APP_JWT_EXPIRY;
         public static string APP_JWT_REFRESH;
         public static string ENVIRONMENT_PATH;
 
-        public const string HISTORY_PATH = @"shimaura.log";
+        public const string HISTORY_PATH = @"shimamura.log";
         public static bool LOGGING_ENABLED;
         
 
@@ -131,9 +131,6 @@ namespace ShimamuraBot
 
             envManager.load(ENVIRONMENT_PATH);
 
-            //Now we have info.
-
-            //oAuth = new events.OAuthClient(HOST, CLIENT_ID, CLIENT_SECRET, $"https://127.0.0.1:{LoopbackPort}/auth", ACCESS_TOKEN, "X-JOYSTICK-STATE", "bot");
             oAuth = new OAuthClient(
                 HOST,
                 CLIENT_ID,
@@ -144,7 +141,7 @@ namespace ShimamuraBot
                 "bot"
             );
 
-            server = new HTTPServer(oAuth);
+            server = new HTTPServer(oAuth); //temporary HTTPListener for authorization code
             WebsocketClient wss = new WebsocketClient();
 
             if (!MainLoop.Running()) MainLoop.Run();
@@ -186,19 +183,19 @@ namespace ShimamuraBot
                         break;
                     case "fuck":
                         //wss.bakeacake(new { });
-                        Print($"ff", 0);
+                        wss.sendMessage("unsubscribe");
+                        wss.Close();
                         break;
                     case "exit" or "quit":
-                        //running = false;
                         MainLoop.Stop();
                         break;
                     case "start" or "run": //TOSTAY
                         if(OAuthClient.checkJWT()) {
                             WSS_GATEWAY = $"{WSS_HOST}?token={ACCESS_TOKEN}";
                             wss.Connect();
-                            Task.Run(() => wss.Listen());
+                            Task.Run(() => wss.Listen(wss.ctx));
 
-                            //wss.sendMessage("subscribe");
+                            wss.sendMessage("subscribe");
                         } else {
                             server.Start();
                             oAuth.State = OAuthClient.Generatestate();
@@ -210,7 +207,6 @@ namespace ShimamuraBot
                             wss.Close();
                         break;
                     case "config"://ehhhhhhhh drake this one
-                        //File.WriteAllText("oAuth2.txt", oAuth.OAuthCode);
                         var t = Task.Run(() => {
                             oAuth.callmewhateverlater(1);
                         });
@@ -218,7 +214,7 @@ namespace ShimamuraBot
                         //TODO: settings
                         break;
                     case "sendit" or "oauth"://PRUNE  AFTER FLOW HAS BEEN COMPLETE.
-                        oAuth.State = OAuthClient.Generatestate(); // FIX THIS SHIT PELASE
+                        oAuth.State = OAuthClient.Generatestate();
                         server.openBrowser(oAuth.Auth_URI.ToString() + $"?client_id={CLIENT_ID}&scope=bot&state={oAuth.State}");
                         break;
                     case "listen"://PRUNE AFTER FLOW HAS BEEN COMPLETE.
@@ -230,14 +226,19 @@ namespace ShimamuraBot
                     case "vcat"://PRUNE
                         vCat.Redeem("meow");
                         break;
-                    case "help"://Fix
-                        Print($"listen - STARTS LISTENING ON THE TEMPORARY FUCKING SERVER OF HTTPLISTENER", 1);
-                        Print($"stoplisten - STOP THE STUPID FUCKING HTTPLISTENER", 1);   
-                        Print($"fun - IDK MASTURBATE?", 1);
-                        Print($"quit/exit/something - IT EXPLODES", 1);
+                    case "exp":
+                        Print($"[Info]: Token expires in {APP_JWT_EXPIRY - GetUnixTimestamp()} seconds", 1);
+                        break;
+                    case "help":
+                        Print($"start - starts the bot", 1);
+                        Print($"stop - stops the bot", 1);
+                        Print($"exp - shows how many seconds are left until your token expires", 1);
+                        Print($"listen - starts the HTTPServer (deprecate)", 1);
+                        Print($"stoplisten - stops the HTTPServer (depcreate)", 1);   
+                        Print($"exit or quit - exits the program gracefully", 1);
                         break;
                     default:
-                        Print("type help", 1);
+                        Print("[UserInputInvalid]: type help for list of commands", 1);
                         break;
                 }
             }

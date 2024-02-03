@@ -3,12 +3,14 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Net.WebSockets;
-//using System.Text.Json;
+using System.Text.Json;
+using System.Text.Json.Serialization;
+using System.Text.Json.Nodes;
 using System.Collections.Generic;
 using System.Text.Encodings.Web;
 using System.Runtime.InteropServices.JavaScript;
-using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
+//using Newtonsoft.Json;
+//using Newtonsoft.Json.Linq;
 
 namespace ShimamuraBot
 {
@@ -42,7 +44,7 @@ namespace ShimamuraBot
         private bool saveHistory { get; set; }
 
         private CancellationTokenSource cts = new CancellationTokenSource();
-        private CancellationToken ctx;
+        public CancellationToken ctx;
 
 
         /// <summary>
@@ -67,7 +69,8 @@ namespace ShimamuraBot
 
         public async Task Connect()
         {
-            Print($"[WSSClient]: Attempting to connect to {WSS_HOST}", 0); //CHANGE THIS BACK!!!!!!!
+            if(WSSClient.State == WebSocketState.Open) { Print($"[WSSClient]: The socket is already open", 2); return; }
+            Print($"[WSSClient]: Attempting to connect to {WSS_HOST}", 0);
             try {
                 WSSClient.Options.SetRequestHeader("Sec-WebSocket-Protocol", "actioncable-v1-json");
                 await WSSClient.ConnectAsync(new Uri(WSS_GATEWAY), ctx);
@@ -81,6 +84,7 @@ namespace ShimamuraBot
         //
         public void Close() {
             cts.Cancel();
+            //Disconnect();
         }
 
 
@@ -92,12 +96,12 @@ namespace ShimamuraBot
         {
             _connected = false;
 
-            if (WSSClient.State == WebSocketState.Closed) {
+            if (WSSClient.State == WebSocketState.Closed || WSSClient.State == WebSocketState.Aborted || WSSClient.State == WebSocketState.CloseSent) {
                 Print($"[WSSClient]: The socket is already closed to {WSS_HOST}", 3);
                 return;
             }
 
-            await WSSClient.CloseAsync(WebSocketCloseStatus.NormalClosure, "Normal Closure", ctx);
+            await WSSClient.CloseAsync(WebSocketCloseStatus.NormalClosure, "Farewell", ctx);
             while(WSSClient.State != WebSocketState.Closed)
                 Thread.Sleep(100);
 
@@ -105,12 +109,176 @@ namespace ShimamuraBot
         }
 
 
+        #region JSONClass
 
-        public class JSONDataStruct {
-            public string? asdf { get; set; }
-            public string? payload { get; set; }
+        #region Presence
+        public class PresenceMessage
+        {
+            public string id { get; set; }
+            public string @event { get; set; }
+            public string type { get; set; }
+            public string text { get; set; }
+            public string channelId { get; set; }
+            public DateTime createdAt { get; set; }
         }
 
+        public class RootPresenceEvent
+        {
+            public string identifier { get; set; }
+            public PresenceMessage message { get; set; }
+        }
+        #endregion
+
+        #region StreamEvents
+        public class RootStreamEvents
+        {
+            public string identifier { get; set; }
+            public Message message { get; set; }
+        }
+
+        public class Message
+        {
+            public string id { get; set; }
+            public string @event { get; set; }
+            public string type { get; set; }
+            public string text { get; set; }
+            public string metadata { get; set; }
+            public DateTime createdAt { get; set; }
+            public string channelId { get; set; }
+
+            [JsonIgnore]
+            public MetadataObject metadataObject => JsonSerializer.Deserialize<MetadataObject>(metadata);
+        }
+
+        public class MetadataObject
+        {
+            public string who { get; set; }
+            public string what { get; set; }
+            public int? howMuch { get; set; }
+            public string tipMenuItem { get; set; }
+            public string prize { get; set; }
+        }
+        #endregion
+
+        #region MessageEvent
+        public class RootMessageEvent
+        {
+            [JsonPropertyName("identifier")]
+            public string identifier { get; set; }
+
+            [JsonPropertyName("message")]
+            public ChatMessage message { get; set; }
+        }
+
+        public class ChatMessage
+        {
+            [JsonPropertyName("event")]
+            public string @event { get; set; }
+
+            [JsonPropertyName("createdAt")]
+            public DateTime createdAt { get; set; }
+
+            [JsonPropertyName("messageId")]
+            public string messageId { get; set; }
+
+            [JsonPropertyName("type")]
+            public string type { get; set; }
+
+            [JsonPropertyName("visibility")]
+            public string visibility { get; set; }
+
+            [JsonPropertyName("text")]
+            public string text { get; set; }
+
+            [JsonPropertyName("botCommand")]
+            public string botCommand { get; set; }
+
+            [JsonPropertyName("botCommandArg")]
+            public string botCommandArg { get; set; }
+
+            [JsonPropertyName("emotesUsed")]
+            public List<object> emotesUsed { get; set; }
+
+            [JsonPropertyName("author")]
+            public ChatUser author { get; set; }
+
+            [JsonPropertyName("streamer")]
+            public ChatUser streamer { get; set; }
+
+            [JsonPropertyName("channelId")]
+            public string channelId { get; set; }
+
+            [JsonPropertyName("mention")]
+            public bool mention { get; set; }
+
+            [JsonPropertyName("mentionedUsername")]
+            public string? mentionedUsername { get; set; }
+        }
+
+        public class ChatUser
+        {
+            [JsonPropertyName("slug")]
+            public string slug { get; set; }
+
+            [JsonPropertyName("username")]
+            public string username { get; set; }
+
+            [JsonPropertyName("usernameColor")]
+            public object usernameColor { get; set; }
+
+            [JsonPropertyName("displayNameWithFlair")]
+            public string displayNameWithFlair { get; set; }
+
+            [JsonPropertyName("signedPhotoUrl")]
+            public string signedPhotoUrl { get; set; }
+
+            [JsonPropertyName("signedPhotoThumbUrl")]
+            public string signedPhotoThumbUrl { get; set; }
+
+            [JsonPropertyName("isStreamer")]
+            public bool isStreamer { get; set; }
+
+            [JsonPropertyName("isModerator")]
+            public bool isModerator { get; set; }
+
+            [JsonPropertyName("isSubscriber")]
+            public bool isSubscriber { get; set; }
+        }
+        #endregion
+        #endregion
+
+        //
+        private void whatifIMessageQueued()
+        {
+
+        }
+
+        //what I'mma use chatdumbpg34 when I can
+        private void IterateJsonElement(JsonElement element)
+        {
+            foreach (JsonProperty property in element.EnumerateObject())
+            {
+                string key = property.Name;
+                JsonElement value = property.Value;
+
+                Print($"[JSON]: Key: {key}", 0);
+
+                if (value.ValueKind == JsonValueKind.Object)
+                    IterateJsonElement(value);
+                else if (value.ValueKind == JsonValueKind.Array)
+                {
+                    //Console.WriteLine("Array found:");
+                    foreach (var arrayElement in value.EnumerateArray()) //fuck arrays
+                    {
+                        // Handle or iterate the array elements
+                        // If they are objects, you can call IterateJsonElement(arrayElement)
+                    }
+                } else {
+                    // It's a simple value (string, number, etc.)
+                    Print($"[JSON]: Value: {value}", 0);
+                }
+            }
+        }
 
         public void onMessage(string data) {
             //var msg = JsonSerializer.Deserialize<JSONDataStruct>(data);
@@ -122,7 +290,104 @@ namespace ShimamuraBot
             dynamic msg2 = JsonSerializer.Deserialize<dynamic>(msg.message);
 
             Print($"[WSS.onMessage]: {msg2.type} --- {msg2}", 0);*/
-            Print($"[WSSClient]: I died. {data}", 0);
+
+            ///lord jesus help me sweet baby jesus
+            ///
+            //Print($"[WSSClient]: SAFETY DUMP: \n{data}\n\n", 0);
+
+            if(data.Contains("ping")) { /*Print($"[WSSClient]: noop", 0);*/ return;  }
+
+            if(data.Contains("confirm_subscription"))
+            {
+                Print($"[JSON]: I'm in.\nWhat? I couldn't resist, jesus give me a break.", 0);
+                return;
+            } else if(data.Contains("reject_subscription")) {
+                Print($"[JSON]: reject_subscription", 0);
+                return;
+            }
+
+            JsonNode jsonNode = JsonNode.Parse(data); //message.event
+            //JsonNode Msgf = JsonNode.Parse((string)jsonNode!["message"]!);
+
+            if (!data.Contains("\"message\":")) return;
+            string eventType = (string)jsonNode["message"]!["event"]!;
+            Print($"[JSON]: Plwese work: {eventType}",0);
+
+            switch (eventType) //dejavu I've been here beforoeoro iterating over an object and digging in deeper and deeper and deeppppppppppppppperrrrrrrrrrrrrrrrrrrrrrrrr 
+            {
+                case "StreamEvent":
+                    var streamEvent = JsonSerializer.Deserialize<RootStreamEvents>(data);
+                    Print($"[StreamEvent]: idk shit happened :: {streamEvent.message.text}", 1);
+                    break;
+                case "ChatMessage":
+                    var msg = JsonSerializer.Deserialize<RootMessageEvent>(data);
+                    if (msg.message.visibility != "public") return;
+
+                    Print($"[Chat]: {msg.message.author.username}: {msg.message.text}", 1);
+                    break;
+                case "UserPresence":
+                    var presencemsg = JsonSerializer.Deserialize<RootPresenceEvent>(data);
+                    var eveType = presencemsg.message.type == "enter_stream" ? "Entered the chat" : "Left the chat";
+                    Print($"[Presence]: {presencemsg.message.text} {eveType}!", 1);
+                    break;
+                default:
+                    Print($"[JSON]: ehh hi", 2);
+                    break;
+            }
+            return;
+
+            dynamic typeOfData = JsonSerializer.Deserialize<dynamic>(data);
+            IterateJsonElement(typeOfData);
+            return;
+            if (typeOfData is JsonElement jsonElement && jsonElement.ValueKind == JsonValueKind.Object) {
+                foreach (JsonProperty f in jsonElement.EnumerateObject())
+                {
+                    Print($"[JSON]: k: {f.Name}, v: {f.Value}\n", 0); //now to fix this shit
+                    if(f.Name == "message")
+                    {
+                        var moo = "";
+                        
+                    }
+                }
+            }
+            //^ that's going to explode or print some shit like system.net.json.object.penis
+
+            //try catch JSONBinding or some shit
+
+            string values = typeOfData.message.@event; //might be better to try 'type' not 'event' //yoink 470a4687924f9561b55f990c6e624800c7108109e84fc88e0598d641e36b7e9f
+
+            switch (values)
+            {
+                case "StreamEvent":
+                    Print($"[JSON]: Received StreamEvent - \n{data}\n", 0);
+                    break;
+                case "ChatMessage":
+                    Print($"[JSON]: Received ChatMessage - \n{data}\n", 0);
+                    break;
+                case "confirm_subscription" or "reject_subscription":
+                    Print($"[JSON]: Received This won't happen - \n{data}\n", 0);
+                    break;
+                case "UserPresence":
+                    Print($"[JSON]: Received UserPresence - \n{data}\n", 0);
+                    break;
+                default:
+                    Print($"[JSON]: ehh hi", 0);
+                    break;
+            }
+
+            if(data.Contains("StreamEvent"))
+            {
+                //deserialz chatmessage
+            }
+            else if(data.Contains("ChatMessage"))
+            {
+                //dersialz streamevent
+            } else if(data.Contains(""))
+            {
+                //try dynamic
+            }
+
+            //Print($"[WSSClient]: I died. {data}", 0);
         }
 
         public void FidgetyStuff(string msg) {
@@ -144,7 +409,7 @@ namespace ShimamuraBot
             }
         }
 
-        /*private string stringifyJSON(string data, object obj2 = null, object obj3 = null)
+        private string stringifyJSON(string data, object obj2 = null, object obj3 = null)
         {
             var json = JsonSerializer.Serialize(obj2);
             var gateway = JsonSerializer.Serialize(GATEWAY_IDENTIFIER);
@@ -168,60 +433,6 @@ namespace ShimamuraBot
                 return resp;
             }
             return null;
-        }*/
-
-        public string JSONobjToString(string type)
-        {
-
-
-            /*object asdf = new
-            {
-                Name = "john",
-                Age = 99,
-                Sex = "Male",
-                Addresses = fXas
-            };*/
-
-
-            //string json = JsonSerializer.Serialize(obj);
-
-
-            //int strlen = "Addresses\":".Length;
-            //int fuck = json.IndexOf("Addresses\":");
-            //int strlenyourassole = (json.Length - fuck); // + 1; //123456789 5 
-
-            //string moo = json.Substring(fuck + strlen, strlenyourassole - strlen);
-
-
-            //var fuck = json.Split("Addresses\":", 2, StringSplitOptions.RemoveEmptyEntries); //split string up to the json delimiter
-            //var fuck = "";
-
-            //switch()
-
-            
-
-            ///var fuckit = json.Replace("}}", "}"); //remove trailing ends
-            ///var fuckitbuckit = fuckit.Replace("\"", "\\\""); //replace all qoutations with escaped qoutations to stringify
-            ///var fuckastep = $"\"{fuckitbuckit}\""; //then wrap that shit in qoutations
-
-
-            //Print($"First index: {{fuck[1]}} and split 2: {fuckastep}", 3);
-
-
-            switch (type)
-            {
-                case "gateway":
-                    return "fuckoff";
-                    break;
-                default:
-                    return null;
-                    break;
-            }
-
-
-            //Print($"{json}", 0);
-
-            //return fuckastep;
         }
 
 
@@ -234,11 +445,13 @@ namespace ShimamuraBot
             ///{ "command": "subscribe",
             ///"identifier": "{\"channel\":\"GatewayChannel\",\"streamer\":\"joystickuser\"}" }
             //user_id backup
-            var fuckoff = "{\"channel\":\"GatewayChannel\",\"streamer\":\"adachi91\"}";
+            var c = "{\\\"channel\\\":\\\"GatewayChannel\\\",\\\"streamer\\\":\\\"adachi91\\\"}";
 
-            JObject o = new JObject {{ "command", data },{ "identifier", fuckoff }};
+            var fuckoff = "{\"command\":\"" + data + "\",\"identifier\":\"" + c + "\"}";
+            Print($"[JSON]: You are preparing to send this shit: \n\n{fuckoff}\n\n", 0);
+            //JObject o = new JObject {{ "command", data },{ "identifier", fuckoff }};
 
-            Print($"{o.ToString()}", 0);
+            //Print($"{o.ToString()}", 0);
 
             //JArray jsonarray = new JArray();
 
@@ -257,7 +470,7 @@ namespace ShimamuraBot
             ///var json = JsonSerializer.Serialize(obi);
             //var json = "ASDFASDFSAF";
             //Print($"[WSSClient]: Sending \n\n{json}\n\n", 0);
-            var buffer = new ArraySegment<byte>(Encoding.UTF8.GetBytes(o.ToString()));
+            var buffer = new ArraySegment<byte>(Encoding.UTF8.GetBytes(fuckoff));
             //foreach (byte boot in buffer)
             //Print($"\n{boot:X2}", 0);
 
@@ -271,52 +484,67 @@ namespace ShimamuraBot
         }
 
 
-        public async Task Listen(CancellationToken ctx = default)
+        public async Task Listen(CancellationToken ctx)
         {
             //if (!_connected) { Print($"[WSSClient]: Could not listen to socket, as it is not open.", 3); return; }
             while(WSSClient.State != WebSocketState.Open) { Thread.Sleep(11); } 
             Print($"[WSSClient]: WSS connection to {WSS_HOST} Successful. Now listening...", 0);
 
             byte[] buffer = new byte[4096]; //1024 bytes IF the header Sec-Websocket-Maximum-Message-Size is detected, then that is the maximum size the buffer can be to prevent DDoSing.
+            Task<WebSocketReceiveResult> resultTask;
             WebSocketReceiveResult result;
             while (WSSClient.State == WebSocketState.Open && !ctx.IsCancellationRequested)
             {
-                try
-                {
-                    result = await WSSClient.ReceiveAsync(new ArraySegment<byte>(buffer), ctx);
-                } catch (Exception ex) {
-                    throw ex;
-                }
-                if (result.MessageType == WebSocketMessageType.Text)
-                {
-                    string message = Encoding.UTF8.GetString(buffer, 0, result.Count);
-                    onMessage(message);
-                    continue;
+                try {
+                    var cancelreceiver = Task.Delay(Timeout.Infinite, ctx);
+                    resultTask = WSSClient.ReceiveAsync(new ArraySegment<byte>(buffer), default); // yay I was right//I think it's aborting on cancel receive but I'm too lazy to google.
+                    var complete = await Task.WhenAny(cancelreceiver, resultTask);
 
-                    if (message.Contains("{\"type\":\"welcome\"}")) {
-                        //Task.Run(() => Subscribe("connect", false, cancellationToken));
-                        //Task.Run(() => Subscribe("subscribe", false, cancellationToken));
+                    if (complete == cancelreceiver) break;
+                    
+                    result = await resultTask;
+
+                    if (result.MessageType == WebSocketMessageType.Text)
+                    {
+                        string message = Encoding.UTF8.GetString(buffer, 0, result.Count);
+                        onMessage(message);
+                        continue;
+
+                        if (message.Contains("{\"type\":\"welcome\"}"))
+                        {
+                            //Task.Run(() => Subscribe("connect", false, cancellationToken));
+                            //Task.Run(() => Subscribe("subscribe", false, cancellationToken));
+                        }
+                    } else if (result.MessageType == WebSocketMessageType.Close) {
+                        Print($"[WSSClient]: Remote {WSS_HOST} closed the socket with Websocket Code: {(int)result.CloseStatus}", 1);
+                        return;
+                    } else {
+                        Print($"[WSSClient]: Unhandled Exception {result.MessageType.ToString()}", 3);
+                        if (WSSClient.State == WebSocketState.Closed) return;
                     }
-                } else if (result.MessageType == WebSocketMessageType.Close) {
-                    string message = Encoding.UTF8.GetString(buffer, 0, result.Count);
-                    onMessage(message);
-                    Print($"[WSSClient]: Remote {WSS_HOST} closed the socket {result}\n {result.CloseStatus}\n {result.CloseStatusDescription}\n {result.MessageType}\n {result.EndOfMessage}\n", 1);
-                    return;
-                } else {
-                    Print($"[WSSClient]: Unhandled Exception {result.MessageType.ToString()}", 3);
-                    if(WSSClient.State == WebSocketState.Closed) return;
+                }
+                catch (TaskCanceledException)
+                {
+                    Print($"[WSSClient]: Task was cancelled.", 1);
+                    break; // Exit the loop if the task was cancelled
+                }
+                catch (Exception ex)
+                {
+                    // Handle other exceptions
+                    Print($"[WSSClient]: Exception: {ex.Message}", 3); //it's scary that it knew that 3 was Error code. and 1 is normal status I've never shown it my print code, so deduced it
                 }
             }
 
-            if(ctx.IsCancellationRequested) {
+            if(ctx.IsCancellationRequested && WSSClient.State == WebSocketState.Open) {
                 Print($"[WSSClient]: Closed connection to {WSS_HOST}", 1);
                 Disconnect();
                 return;
             }
 
-            if (WSSClient.State != WebSocketState.Open)
+            if (!ctx.IsCancellationRequested && WSSClient.State != WebSocketState.Open)
                 Print($"[WSSClient]: Socket closed remotely from {WSS_HOST}", 3);
 
+            Print($"[WSSClient]: Bye.", 4);
             Disconnect(); //if it's not already closed properly
         }
 

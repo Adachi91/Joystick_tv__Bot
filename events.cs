@@ -10,9 +10,8 @@ using System.Text;
 using System.IO;
 using System.Net.Http.Json;
 using System.Text.Json;
-using System.Reflection.PortableExecutable;
-using Microsoft.VisualBasic;
-//using System.Runtime.InteropServices;
+//using System.Reflection.PortableExecutable;
+//using Microsoft.VisualBasic;
 
 namespace ShimamuraBot
 {
@@ -26,7 +25,7 @@ namespace ShimamuraBot
          */
         private bool _disposed = false;
 
-        private string theChannel = $"{Program.GATEWAY_IDENTIFIER}"; //THIS NEEDS TO BE SERIALIZED! //token.channel;
+        //private string theChannel = $"{GATEWAY_IDENTIFIER}"; //THIS NEEDS TO BE SERIALIZED! //token.channel;
         private string _user_id;
         private string _user_uuid;
         private string _stream_id;
@@ -119,11 +118,8 @@ namespace ShimamuraBot
         /// Get the current UTC Unix Timestamp
         /// </summary>
         /// <returns>(long) Timestamp</returns>
-        public static long GetUnixTimestamp()
-        {
-            long timestamp = (Int64)(DateTime.UtcNow.Subtract(new DateTime(1970, 1, 1))).TotalSeconds;
-
-            return timestamp;
+        public static long GetUnixTimestamp() {
+            return (Int64)(DateTime.UtcNow.Subtract(new DateTime(1970, 1, 1))).TotalSeconds;
         }
 
 
@@ -145,7 +141,7 @@ namespace ShimamuraBot
             switch (command) {
                 case "connect":
                     //msg template
-                    msg.Add(new { command = "", identifier = "{\"channel\":\"" + theChannel + "\"}" });
+                    msg.Add(new { command = "", identifier = "{\"channel\":\"" + "theChannel" + "\"}" });
 
                     msg.Add(new { command = "subscribe", identifier = "{\"channel\":\"ApplicationChannel\"}" });
                     msg.Add(new { command = "subscribe", identifier = "{\"channel\":\"SystemEventChannel\",\"user_id\":\"" + _user_id + "\"}" });
