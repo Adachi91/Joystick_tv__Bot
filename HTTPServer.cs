@@ -55,12 +55,8 @@ namespace ShimamuraBot
         }
 
 
-        /// <summary>
-        ///  Attempt to see if port for loopback is in use currently.
-        /// </summary>
-        /// <returns>boolean</returns>
-        /// <exception cref="Exception"></exception>
-        private async Task<bool> PortCheck() {
+
+        /*private async Task<bool> PortCheck() {
             try {
                 Print($"[HTTPServer]: Checking if port {LoopbackPort} is open", 0);
                 using (TcpClient client = new TcpClient()) {
@@ -87,6 +83,33 @@ namespace ShimamuraBot
             } catch (Exception ex) {
                 Print($"{ex}", 0);
                 return true;
+            }
+        }*/
+
+        /// <summary>
+        ///  Attempt to see if port for loopback is in use currently.
+        /// </summary>
+        /// <returns>boolean</returns>
+        /// <exception cref="SocketException"></exception>
+        private async Task<bool> PortCheck() {
+            try {
+                Print($"[HTTPServer]: Checking if port {LoopbackPort} is open", 0);
+
+                using (TcpClient client = new TcpClient()) {
+                    await client.ConnectAsync("127.0.0.1", LoopbackPort);
+                    Print($"[HTTPServer]: The port {LoopbackPort} is being used by another program", 3);
+                    return true;
+                }
+            } catch (SocketException ex) {
+                if (ex.SocketErrorCode == SocketError.ConnectionRefused) {
+                    Print($"[HTTPServer]: 127.0.0.1:{LoopbackPort} was refused. So assuming it's in use", 0);
+                    return true;
+                }
+                Print($"[HTTPServer]: SocketException: {ex.Message}", 3);
+                return false;
+            } catch (Exception ex) {
+                Print($"[HTTPServer]: Exception: {ex.Message}", 3);
+                return false;
             }
         }
 
@@ -131,6 +154,55 @@ namespace ShimamuraBot
         {
             listener.Start();
             Print($"[HTTPServer]: Started on http://127.0.0.1:{LoopbackPort}/auth/", 1);
+
+
+            try
+            {
+                while (!Token.IsCancellationRequested) {
+                    var contextTask = listener.GetContextAsync();
+                    var completedTask = await Task.WhenAny(contextTask, Task.Delay(Timeout.Infinite, Token));
+
+                    if (completedTask != contextTask)
+                        break;
+
+                    var ctx = await contextTask;
+                    var request = ctx.Request;
+
+                    using (var reader = new StreamReader(request.InputStream)) {
+                        var requestBody = await reader.ReadToEndAsync();
+
+                        if (!string.IsNullOrEmpty(request.QueryString["state"]))
+                            if (request.QueryString["state"] == OAuthPtr.State)
+                                if (!string.IsNullOrEmpty(request.QueryString["code"]))
+                                    OAuthPtr.OAuthCode = request.QueryString["code"];
+                                else
+                                    Print($"[HTTPServer]: Unable to Retrieve Authorization code from {HOST}", 3);
+                            else
+                                Print($"[HTTPServer]: The nounce returned by {HOST} was not a match!", 3);
+                    }
+                    // Having a bad day will come back and finish this later..
+                    // Rest of code for processing the request and sending response...
+
+                    // Send response back
+                    var response = ctx.Response;
+                    response.ContentType = "text/html";
+                    await using (var writer = new StreamWriter(response.OutputStream))
+                    {
+                        await writer.WriteAsync("<!DOCTYPE html><html lang=\"en\"><head><title>Authorization Successful</title><style>html,body{background-color:#1c1b22;color:#fff;} h1 {margin:auto; text-align:center; padding-top:5rem;}</style></head><body><h1>Request was Successful. You may close this page now.</h1></body></html>");
+                    }
+
+                    // Handle response status and OAuth
+                }
+            } catch (HttpListenerException ex) {
+                Print($"[HTTPServer]: HttpListenerException. Error: {ex.Message}", 3);
+            } catch (Exception ex) {
+                Print($"[HTTPServer]: Exception occurred. Error: {ex.Message}", 3);
+            } finally {
+                if (listener.IsListening)
+                    listener.Stop();
+                Print($"[HTTPServer]: Server stopped.", 1);
+            }
+
 
             try
             {
