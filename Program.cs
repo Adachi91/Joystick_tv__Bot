@@ -179,14 +179,14 @@ namespace ShimamuraBot
             Console.WriteLine("Type \"Help\" for commands, or \"Start\" to start the bot");
             #endregion
 
-            ///events.Print($"[.env]: Host: {HOST}", 0);
-            ///events.Print($"[.env]: ID: {CLIENT_ID}", 0);
-            ///events.Print($"[.env]: Secret: {CLIENT_SECRET}", 0);
-            ///events.Print($"[.env]: WSS: {WSS_HOST}", 0);
-            ///events.Print($"[.env]: Token: {ACCESS_TOKEN}", 0);
-            ///events.Print($"[.env]: Gateway: {GATEWAY_IDENTIFIER}", 0);
-            ///events.Print($"[.env]: Refresh: {APP_JWT_REFRESH}", 0);
-            events.Print($"[environment]: Successfully loaded environment file.", 1);
+            ///Print($"[.env]: Host: {HOST}", 0);
+            ///Print($"[.env]: ID: {CLIENT_ID}", 0);
+            ///Print($"[.env]: Secret: {CLIENT_SECRET}", 0);
+            ///Print($"[.env]: WSS: {WSS_HOST}", 0);
+            ///Print($"[.env]: Token: {ACCESS_TOKEN}", 0);
+            ///Print($"[.env]: Gateway: {GATEWAY_IDENTIFIER}", 0);
+            ///Print($"[.env]: Refresh: {APP_JWT_REFRESH}", 0);
+            Print($"[environment]: Successfully loaded environment file.", 1);
             var x = true;
             while (x) {
                 Console.Write(">");
