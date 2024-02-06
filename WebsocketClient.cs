@@ -37,7 +37,7 @@ namespace ShimamuraBot
         /// <summary>
         /// Creates an instance of the events class to construct messages, supplying the bot id, uuid, and currently stream_id (ew)
         /// </summary>
-        public events _events;
+        //public events _events;
         private ClientWebSocket WSSClient;
 
         public Dictionary<DateTime, Tuple<string, string>> History = new Dictionary<DateTime, Tuple<string, string>>();

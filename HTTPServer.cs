@@ -15,7 +15,7 @@ namespace ShimamuraBot
         private readonly HttpListener listener;
         private OAuthClient _OAuthPtr;
 
-        private CancellationTokenSource cts = new CancellationTokenSource();
+        private CancellationTokenSource cts;
         private CancellationToken cancelToken;
 
         /// <summary>
@@ -23,7 +23,6 @@ namespace ShimamuraBot
         /// </summary>
         /// <param name="OAuthPtr">Constructed OAuth class pointer</param>
         public HTTPServer(OAuthClient OAuthPtr) {
-            cancelToken = cts.Token;
             listener = new HttpListener();
             listener.Prefixes.Add($"http://127.0.0.1:{LoopbackPort}/auth/");
             _OAuthPtr = OAuthPtr;
@@ -36,13 +35,16 @@ namespace ShimamuraBot
         ///  Checks if port is in use if not it will start the HTTPListener
         /// </summary>
         /// <returns></returns>
-        public async Task<bool> Start() { //passed test
-            if (!PortCheck())
-                Task.Run(() => StartAsync(_OAuthPtr, cancelToken));
-            else
-                return false;
+        public void Start() { //passed test
+            if (PortCheck()) {
+                cts = new CancellationTokenSource();
+                cancelToken = cts.Token;
 
-            return true;
+                var state = OAuthClient.Generatestate();
+
+                Task.Run(() => StartAsync(_OAuthPtr, cancelToken));
+                openBrowser(_OAuthPtr.Auth_URI.ToString() + $"?client_id={CLIENT_ID}&scope=bot&state={_OAuthPtr.State}");
+            }
         }
 
 
@@ -54,10 +56,11 @@ namespace ShimamuraBot
             cts.Cancel();
         }
 
+
         /// <summary>
         ///  Attempt to see if port for loopback is in use currently.
         /// </summary>
-        /// <returns>boolean</returns>
+        /// <returns>(Bool) True:Usable, False:SocketException/In use</returns>
         /// <exception cref="SocketException"></exception>
         private bool PortCheck() { //passed test
             try {
@@ -68,14 +71,14 @@ namespace ShimamuraBot
                     portListener.Start();
                     portListener.Stop();
                     Print($"[HTTPServer]: Port {LoopbackPort} is free", 0);
-                    return false;
+                    return true;
                 }
             } catch (SocketException ex) {
-                Print($"[HTTPServer]: Port {LoopbackPort} is in use by another program.", 3);
-                return true;
+                Print($"[HTTPServer]: SocketException while checking Port({LoopbackPort}): {ex.Message}", 3);
+                return false;
             } catch (Exception ex) {
                 Print($"[HTTPServer]: Exception while checking port({LoopbackPort}): {ex.Message}", 3);
-                return true;
+                return false;
             }
         }
 
@@ -85,7 +88,7 @@ namespace ShimamuraBot
         /// </summary>
         /// <param name="url">Complete HOST URI</param>
         /// <exception cref="Exception"></exception>
-        public void openBrowser(string url) { //Code from ODIC Sample Code on Github.
+        private void openBrowser(string url) { //Code from ODIC Sample Code on Github.
             Print($"Opening {HOST} in your webbrowser for authorization", 1);
             try {
                 Process.Start(url);
@@ -146,13 +149,15 @@ namespace ShimamuraBot
                     await using (var writer = new StreamWriter(listenerCtx.Response.OutputStream))
                         await writer.WriteAsync("<!DOCTYPE html><html lang=\"en\"><head><title>Authorization Successful</title><style>html,body{background-color:#1c1b22;color:#fff;} h1 {margin:auto; text-align:center; padding-top:5rem;}</style></head><body><h1>Request was Successful. You may close this page now.</h1></body></html>");
 
-                    Print($"[HTTPServer]: Successfully got OAuth2 code from {HOST}. HTTPServer shutting down...", 1);
+                    Print($"[HTTPServer]: Successfully got OAuth2 code from {HOST}", 1);
+                    cts.Cancel();
                 }
             } catch (Exception ex) {
                 Print($"[HTTPServer]: {ex.Message}", 3);
             } finally {
                 if (listener.IsListening)
                     listener.Stop();
+                Print($"[HTTPServer]: Shutting down.", 1);
             }
         }
     }

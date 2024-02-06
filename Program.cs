@@ -86,23 +86,6 @@ namespace ShimamuraBot
                  * OH that's what client does I think.
                  */
 
-                //server = new HTTPServer(oAuth);
-                //server.Start();
-                //events.Print($"Server should have started thingy {asdf}", 0);
-
-                /*if(((ct - cl) % 10) >= 0) //GOOOOOOOOOOOOOOOOOO
-
-                if(((11 - 10) % 100) >= 0) //GOOOOOOOOOOOOOOOOOO
-
-                if(((11 - 10) % 20) >= 0) //GOOOOOOOOOOOOOOOOOO
-
-                if(((11 - 10) % 10) >= 0) //GOOOOOOOOOOOOOOOOOO
-
-                if(((11 - 10) % 10) >= 0) //GOOOOOOOOOOOOOOOOOO
-
-                if(((11 - 10) % 10) >= 0) //GOOOOOOOOOOOOOOOOOO
-
-                if(((11 - 10) % 10) >= 0)*/ //GOOOOOOOOOOOOOOOOOO
                 Thread.Sleep(1000);
                 //shutdownreceive
                 Console.WriteLine("hi");
@@ -197,7 +180,7 @@ namespace ShimamuraBot
                     case "":
                         break;
                     case "test":
-                        MainLoop.isExiting.Cancel();
+                        server.Start();
                         break;
                     case "fuck":
                         //wss.bakeacake(new { });
@@ -214,11 +197,8 @@ namespace ShimamuraBot
                             Task.Run(() => wss.Listen(wss.ctx));
 
                             wss.sendMessage("subscribe");
-                        } else {
+                        } else
                             server.Start();
-                            oAuth.State = OAuthClient.Generatestate();
-                            server.openBrowser(oAuth.Auth_URI.ToString() + $"?client_id={CLIENT_ID}&scope=bot&state={oAuth.State}");
-                        }
                         break;
                     case "stop":
                         Print($"[MainThread]: Attempting to close socket", 0);
@@ -230,10 +210,6 @@ namespace ShimamuraBot
                         });
                         Print("Idk - dumped oauth code to oauth2.txt", 4);
                         //TODO: settings
-                        break;
-                    case "sendit" or "oauth"://PRUNE  AFTER FLOW HAS BEEN COMPLETE.
-                        oAuth.State = OAuthClient.Generatestate();
-                        server.openBrowser(oAuth.Auth_URI.ToString() + $"?client_id={CLIENT_ID}&scope=bot&state={oAuth.State}");
                         break;
                     case "listen"://PRUNE AFTER FLOW HAS BEEN COMPLETE.
                         server.Start();
@@ -276,6 +252,16 @@ namespace ShimamuraBot
             return true;
         }
 
+
+        /// <summary>
+        /// Call on every type of termination to make sure that sockets, servers, etc are all shut down properly.
+        /// </summary>
+        /// <param name="sender"></param>
+        /// <param name="e"></param>
+        private void onClose(object sender, EventArgs e)
+        {
+
+        }
 
         /*
          * Token management needs to happen before closure

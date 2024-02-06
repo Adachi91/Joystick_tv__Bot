@@ -35,7 +35,6 @@ namespace ShimamuraBot
             int startIndex = txt.IndexOf('[');
             int endIndex = txt.IndexOf("]: ");
             string tag;
-            string ctx;
 
             if (startIndex != -1 && endIndex != -1 && endIndex > startIndex && startIndex == 0) {
                 tag = txt.Substring(startIndex + 1, (endIndex - startIndex) - 1);

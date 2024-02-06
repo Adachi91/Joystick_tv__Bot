@@ -80,22 +80,17 @@ namespace ShimamuraBot
 
                 //string jsonPayload = JsonSerializer.Serialize(payload);
                 byte[] buffer = Encoding.UTF8.GetBytes(msg);
-                events.Print($"[vNyan]: Attempting to send {msg} to vNyan", 0);
+                Print($"[vNyan]: Attempting to send {msg} to vNyan", 0);
 
                 try {
                     //Use IPv4 localhost instead of 'localhost' because it will try and route to IPv6 and bounce around causing up to 1 second latency.
                     await vNyan.ConnectAsync(new Uri("ws://127.0.0.1:8000/vnyan"), cancelRequest);
                     vNyan.SendAsync(new ArraySegment<byte>(buffer), WebSocketMessageType.Text, true, cancelRequest);
                 } catch (Exception ex) {
-                    events.Print($"{ex}", 3);
-                }
-                //not needed because of the nature of shit above, how fucking abstract.
-                while (false)//!cts.IsCancellationRequested)
-                {
-                    Thread.Sleep(10);
+                    Print($"{ex}", 3);
                 }
 
-                events.Print("[vNyan]: Disposing Websocket Client", 0);
+                Print("[vNyan]: Disposing Websocket Client", 0);
             }
         }
     }
