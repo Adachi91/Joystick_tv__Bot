@@ -24,7 +24,16 @@ namespace ShimamuraBot
         public readonly Uri Auth_URI;
         public readonly Uri Token_URI;
         public string State;
-        public string OAuthCode;
+        public string OAuthCode {
+            get { return _oauthCode; }
+            set {
+                _oauthCode = value;
+                if (!string.IsNullOrEmpty(_oauthCode))
+                    if (!checkJWT())
+                        callmewhateverlater(1);
+            }
+        }
+        private string _oauthCode;
 
         /// <summary>
         ///  OAuth Constructor class
@@ -113,21 +122,18 @@ namespace ShimamuraBot
                                 Print($"[HTTPClient]: There was a mismatch in the return state from {HOST}", 3);
 
                     UpdateValues(respData);
-                    //send to envManager or handle internally in OAuth
                 } else
                     Print($"[HTTPClient]: Failed to retrieve JWT from {HOST} with HTTP status of {resp.StatusCode}", 3);
             }
         }
 
-        private class ResponseDeserialization
-        {
+        private class ResponseDeserialization {
             public string access_token { get; set; }
             public long? expires_in { get; set; }
             public string refresh_token { get; set; }
         }
 
-        public void UpdateValues(string data)
-        {
+        public void UpdateValues(string data) {
             try {
                 var respData = JsonSerializer.Deserialize<ResponseDeserialization>(data);
                 APP_JWT = respData.access_token;
@@ -139,7 +145,7 @@ namespace ShimamuraBot
             } catch (Exception ex) {
                 Print($"[JWT Parser]: There was an error parsing the response from {HOST}\n{ex}\n", 3);
             }
-            envManager.write(ENVIRONMENT_PATH);
+            envManager.write();
         }
 
         public void checkTimestamp()

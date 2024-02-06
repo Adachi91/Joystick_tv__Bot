@@ -212,7 +212,7 @@ namespace ShimamuraBot
             public bool mention { get; set; }
 
             [JsonPropertyName("mentionedUsername")]
-            public string? mentionedUsername { get; set; }
+            public string mentionedUsername { get; set; }
         }
 
         public class ChatUser
@@ -306,10 +306,11 @@ namespace ShimamuraBot
                 return;
             }
 
+            if (!data.Contains("\"message\":")) return;
+
             JsonNode jsonNode = JsonNode.Parse(data); //message.event
             //JsonNode Msgf = JsonNode.Parse((string)jsonNode!["message"]!);
 
-            if (!data.Contains("\"message\":")) return;
             string eventType = (string)jsonNode["message"]!["event"]!;
             Print($"[JSON]: Plwese work: {eventType}",0);
 
@@ -484,7 +485,7 @@ namespace ShimamuraBot
         }
 
 
-        public async Task Listen(CancellationToken ctx)
+        public async Task Listen(CancellationToken ctx) //todo: optimize
         {
             //if (!_connected) { Print($"[WSSClient]: Could not listen to socket, as it is not open.", 3); return; }
             while(WSSClient.State != WebSocketState.Open) { Thread.Sleep(11); } 

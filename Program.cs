@@ -4,6 +4,7 @@ using System.Collections;
 using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Threading.Channels;
 using System.Collections.Generic;
 using System.Linq;
 using System.Security.Cryptography.X509Certificates;
@@ -44,6 +45,7 @@ namespace ShimamuraBot
         {
             public readonly ManualResetEvent ExitEvent = new ManualResetEvent(false);
             public CancellationTokenSource isExiting = new CancellationTokenSource();
+            public CancellationToken cancellationToken;
             private bool Started { get; set; } = false;
 
             public bool Running() { return Started; }
@@ -58,13 +60,14 @@ namespace ShimamuraBot
 
             public MainThread()
             {
+                cancellationToken = isExiting.Token;
                 //MainLoop.Start();
                 //Remember to Thread.join() Jackass. 2024
             }
 
             //mainloop shit below this line turn back you don't want to die by reading what's below.
-            private static HTTPServer server;
-            public void Start() { MainLoop.Start(); }
+            //private static HTTPServer server;
+            public void Start() { MainLoop.Start(new { isExiting = cancellationToken }); }
             public void Touchy() { server.Stop(); }
 
             private Thread MainLoop = new Thread((object obj) => { //DOES THIS SHIT EVEN EXECUTE?!?!?
@@ -73,8 +76,9 @@ namespace ShimamuraBot
                 //though I do imagine HTTPClient will have SOME events to hook into and monitor, why is HTTPListener a little bitch? idk.
 
                 //Manage, Monitor, Handle different aspects of the program while waiting for user input
+                var isExiting = (CancellationToken)obj;
 
-                FiveMillionTimers.Add("Apples", 023985723985);
+                //FiveMillionTimers.Add("Apples", 023985723985);
 
                 /*
                  * init -> Thread.MainLoop(obj).Start() -> OAuth instance(ML) -> HTTPServer start(ML) -> Code populated -> HTTPServer GetToken(ML) ->
@@ -82,8 +86,8 @@ namespace ShimamuraBot
                  * OH that's what client does I think.
                  */
 
-                server = new HTTPServer(oAuth);
-                server.Start();
+                //server = new HTTPServer(oAuth);
+                //server.Start();
                 //events.Print($"Server should have started thingy {asdf}", 0);
 
                 /*if(((ct - cl) % 10) >= 0) //GOOOOOOOOOOOOOOOOOO
@@ -99,8 +103,19 @@ namespace ShimamuraBot
                 if(((11 - 10) % 10) >= 0) //GOOOOOOOOOOOOOOOOOO
 
                 if(((11 - 10) % 10) >= 0)*/ //GOOOOOOOOOOOOOOOOOO
-
+                Thread.Sleep(1000);
                 //shutdownreceive
+                Console.WriteLine("hi");
+                while (!isExiting.IsCancellationRequested)
+                {
+                Console.WriteLine("hi2");
+                    var f = HOST;
+                    Print($"MainLoop says hi!", 0);
+                    //Logger.appendFile("");
+
+                    Thread.Sleep(100);
+                }
+                Print($"Cancellation of MainLoop executed. Terminating loop. Goodbye.", 0);
 
             });
         }
@@ -129,7 +144,7 @@ namespace ShimamuraBot
                 }
             }
 
-            envManager.load(ENVIRONMENT_PATH);
+            envManager.load();
 
             oAuth = new OAuthClient(
                 HOST,
@@ -172,8 +187,8 @@ namespace ShimamuraBot
             ///events.Print($"[.env]: Gateway: {GATEWAY_IDENTIFIER}", 0);
             ///events.Print($"[.env]: Refresh: {APP_JWT_REFRESH}", 0);
             events.Print($"[environment]: Successfully loaded environment file.", 1);
-
-            while (MainLoop.Running()) {
+            var x = true;
+            while (x) {
                 Console.Write(">");
                 string input = Console.ReadLine();
 
@@ -181,13 +196,16 @@ namespace ShimamuraBot
                 {
                     case "":
                         break;
+                    case "test":
+                        MainLoop.isExiting.Cancel();
+                        break;
                     case "fuck":
                         //wss.bakeacake(new { });
                         wss.sendMessage("unsubscribe");
                         wss.Close();
                         break;
                     case "exit" or "quit":
-                        MainLoop.Stop();
+                        x = false;//MainLoop.Stop();
                         break;
                     case "start" or "run": //TOSTAY
                         if(OAuthClient.checkJWT()) {

@@ -11,15 +11,14 @@ namespace ShimamuraBot
     public static class envManager
     {
         /// <summary>
-        /// Loads the environment file at the destination
+        ///  Loads the environment file
         /// </summary>
-        /// <param name="fp">The destination of the environment file</param>
         /// <exception cref="Exception"></exception>
-        public static void load(string fp)
+        public static void load()
         {
             string tmp = null; //hold the long in a string for this type of switch to work.
             string _logging = null;
-            foreach (var line in File.ReadAllLines(fp)) {
+            foreach (var line in File.ReadAllLines(ENVIRONMENT_PATH)) {
                 var split = line.Split('=', 2, StringSplitOptions.RemoveEmptyEntries);
                 //int a = line.IndexOf('=');
                 //var split = line.Split()
@@ -52,14 +51,14 @@ namespace ShimamuraBot
         }
 
         /// <summary>
-        /// Writes Token information to the environment file if it is already acquired (Requires full OAuth flow first)
+        ///  Writes Token information to the environment file
         /// </summary>
-        /// <param name="fp">The destination of the environment file</param>
-        public static void write(string fp, bool logging = false)
+        /// <param name="logging">(Optional)Boolean - Save all client events to log file.</param>
+        public static void write(bool logging = false)
         {
             bool JWT_SET = false;
 
-            List<string> env = File.ReadAllLines(fp).ToList();
+            List<string> env = File.ReadAllLines(ENVIRONMENT_PATH).ToList();
 
             for (int i = 0; i < env.Count; i++) {
                 if (env[i].StartsWith("JWT=")){
@@ -81,7 +80,7 @@ namespace ShimamuraBot
                 env.Add("LOGGING=" + logging);
             }
 
-            File.WriteAllLines(fp, env);
+            File.WriteAllLines(ENVIRONMENT_PATH, env);
         }
     }
 }
