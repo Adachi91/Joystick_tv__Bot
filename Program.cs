@@ -68,7 +68,7 @@ namespace ShimamuraBot
             //mainloop shit below this line turn back you don't want to die by reading what's below.
             //private static HTTPServer server;
             public void Start() { MainLoop.Start(new { isExiting = cancellationToken }); }
-            public void Touchy() { server.Stop(); }
+            public void Touchy() { tempWebserver.Stop(); }
 
             private Thread MainLoop = new Thread((object obj) => { //DOES THIS SHIT EVEN EXECUTE?!?!?
                 //There are a lot of off-side threads running taskes such as tcp connections
@@ -105,7 +105,7 @@ namespace ShimamuraBot
         #endregion
 
         private static OAuthClient oAuth;
-        private static HTTPServer server;
+        private static HTTPServer tempWebserver;
         private static VNyan vCat = new VNyan();
         public static MainThread MainLoop = new MainThread();
         static void Main(string[] args)
@@ -139,7 +139,7 @@ namespace ShimamuraBot
                 "bot"
             );
 
-            server = new HTTPServer(oAuth); //temporary HTTPListener for authorization code
+            tempWebserver = new HTTPServer(oAuth);
             WebsocketClient wss = new WebsocketClient();
 
             if (!MainLoop.Running()) MainLoop.Run();
@@ -172,15 +172,15 @@ namespace ShimamuraBot
             Print($"[environment]: Successfully loaded environment file.", 1);
             var x = true;
             while (x) {
-                Console.Write(">");
                 string input = Console.ReadLine();
 
                 switch (input.ToLower())
                 {
                     case "":
+                        Print("", 0);
                         break;
                     case "test":
-                        server.Start();
+                        
                         break;
                     case "fuck":
                         //wss.bakeacake(new { });
@@ -198,7 +198,7 @@ namespace ShimamuraBot
 
                             wss.sendMessage("subscribe");
                         } else
-                            server.Start();
+                            tempWebserver.Start();
                         break;
                     case "stop":
                         Print($"[MainThread]: Attempting to close socket", 0);
@@ -212,10 +212,10 @@ namespace ShimamuraBot
                         //TODO: settings
                         break;
                     case "listen"://PRUNE AFTER FLOW HAS BEEN COMPLETE.
-                        server.Start();
+                        tempWebserver.Start();
                         break;
                     case "stoplisten"://PRUNE  AFTER FLOW HAS BEEN COMPLETE.
-                        server.Stop();
+                        tempWebserver.Stop();
                         break;
                     case "vcat"://PRUNE
                         vCat.Redeem("meow");
@@ -223,13 +223,18 @@ namespace ShimamuraBot
                     case "exp":
                         Print($"[Info]: Token expires in {APP_JWT_EXPIRY - GetUnixTimestamp()} seconds", 1);
                         break;
+                    case "logging":
+                        LOGGING_ENABLED = !LOGGING_ENABLED;
+                        if(LOGGING_ENABLED) Print($"[Logger]: logging is now enabled", 1); else Print($"[Logger]: logging is now disabled", 1);
+                        break;
                     case "help":
-                        Print($"start - starts the bot", 1);
-                        Print($"stop - stops the bot", 1);
-                        Print($"exp - shows how many seconds are left until your token expires", 1);
-                        Print($"listen - starts the HTTPServer (deprecate)", 1);
-                        Print($"stoplisten - stops the HTTPServer (depcreate)", 1);   
-                        Print($"exit or quit - exits the program gracefully", 1);
+                        Print($"start - Starts the bot", 1);
+                        Print($"stop - Stops the bot", 1);
+                        Print($"exp - Shows how many seconds are left until your token expires", 1);
+                        Print($"logging - Toggle logging on/off", 1);
+                        Print($"listen - Starts the HTTPServer (deprecate)", 1);
+                        Print($"stoplisten - Stops the HTTPServer (depcreate)", 1);   
+                        Print($"exit or quit - Exits the program gracefully", 1);
                         break;
                     default:
                         Print("[UserInputInvalid]: type help for list of commands", 1);

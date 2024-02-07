@@ -9,8 +9,6 @@ using System.Text.Json.Nodes;
 using System.Collections.Generic;
 using System.Text.Encodings.Web;
 using System.Runtime.InteropServices.JavaScript;
-//using Newtonsoft.Json;
-//using Newtonsoft.Json.Linq;
 
 namespace ShimamuraBot
 {

@@ -82,5 +82,17 @@ namespace ShimamuraBot
 
             File.WriteAllLines(ENVIRONMENT_PATH, env);
         }
+
+        /// <summary>
+        ///  Load specific module settings such as vNyan, VTuber Studio, etc
+        /// </summary>
+        /// <param name="path">File Destination</param>
+        public static void load_Modules(string path) {
+            if(File.Exists(path)) {
+
+            } else {
+                Print($"[ModuleLoader]: Could not find the file specified", 3);
+            }
+        }
     }
 }
