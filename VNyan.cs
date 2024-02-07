@@ -24,8 +24,8 @@ namespace ShimamuraBot
                 case "yeet":
                     SendTovNyan("Test");
                     break;
-                case "Testa":
-                    SendTovNyan("Testa");
+                case "duck":
+                    SendTovNyan("duck");
                     break;
                 case "meow":
                     SendTovNyan("meow");

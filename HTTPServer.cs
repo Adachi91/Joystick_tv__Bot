@@ -32,7 +32,7 @@ namespace ShimamuraBot
 
 
         /// <summary>
-        ///  Checks if port is in use if not it will start the HTTPListener
+        ///  Starts the HTTPListener for OAuth2 Loopback Flow
         /// </summary>
         /// <returns></returns>
         public void Start() { //passed test
@@ -49,7 +49,7 @@ namespace ShimamuraBot
 
 
         /// <summary>
-        /// Stop the HTTPServer client
+        ///  Force Stop the HTTPListener
         /// </summary>
         public void Stop() { //passed test
             if (!listener.IsListening) { Print($"[HTTPServer]: Server is not currently running", 2); return; }

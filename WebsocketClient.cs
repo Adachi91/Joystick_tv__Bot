@@ -30,19 +30,21 @@ namespace ShimamuraBot
          * 1003 indicates that an endpoint is terminating the connection because it has received a type of data it cannot accept (e.g., an endpoint that understands only text data MAY send this if it receives a binary message).
          */
 
-        public bool _connected { get; private set; }
-        public bool isExiting { get; set; }
+        private bool _connected { get; set; }
+        private bool _faulted { get; set; }
+        //public bool isExiting { get; set; }
         /// <summary>
         /// Creates an instance of the events class to construct messages, supplying the bot id, uuid, and currently stream_id (ew)
         /// </summary>
         //public events _events;
         private ClientWebSocket WSSClient;
 
-        public Dictionary<DateTime, Tuple<string, string>> History = new Dictionary<DateTime, Tuple<string, string>>();
+        //public Dictionary<DateTime, Tuple<string, string>> History = new Dictionary<DateTime, Tuple<string, string>>();
         private bool saveHistory { get; set; }
 
-        private CancellationTokenSource cts = new CancellationTokenSource();
+        private CancellationTokenSource cts;
         public CancellationToken ctx;
+        private VNyan vCat = new VNyan();
 
 
         /// <summary>
@@ -52,22 +54,17 @@ namespace ShimamuraBot
         {
             if (_history) saveHistory = true;
 
-            ctx = cts.Token;
-
-            WSSClient = new ClientWebSocket();
-            //WSSClient.Options.AddSubProtocol("wss");
-            WSSClient.Options.AddSubProtocol("actioncable-v1-json");
-            
-            //WSSClient.Options.AddSubProtocol("actioncable-unsupported");
-
-
-            //_events = new events(bot_id, bot_uuid, bot_token, stream_id);
+            //WSSClient = new ClientWebSocket();
+            //WSSClient.Options.AddSubProtocol("actioncable-v1-json");
         }
 
 
-        public async Task Connect()
+        /*public async Task Connect_original()
         {
-            if(WSSClient.State == WebSocketState.Open) { Print($"[WSSClient]: The socket is already open", 2); return; }
+            if(WSSClient.State == WebSocketState.Open) { Print($"[WSSClient]: The socket to {HOST} is already open", 2); return; }
+
+            cts = new CancellationTokenSource();
+            ctx = cts.Token;
             Print($"[WSSClient]: Attempting to connect to {WSS_HOST}", 0);
             try {
                 WSSClient.Options.SetRequestHeader("Sec-WebSocket-Protocol", "actioncable-v1-json");
@@ -76,13 +73,28 @@ namespace ShimamuraBot
             } catch (Exception ex) {
                 Print($"[WSSClient]: Connection Error {ex}", 3);
             }
+            using(ClientWebSocket wss = new ClientWebSocket())
+            {
+                wss.Options.SetRequestHeader("", "");
+                await wss.ConnectAsync(new Uri(WSS_GATEWAY), ctx);
+            }
+        }*/
+
+
+        public async Task Connect() {
+            //if(WSSClient != null) { WSSClient.Dispose(); }
+            if(_connected) { Print($"[Websocket]: Socket already in use", 2); return; }
+            if(_faulted) { Print($"[Websocket]: Attempting to reconnect to {WSS_HOST}", 1); _faulted = false; }
+
+            Task.Run(() => { startWebsocket(); });
         }
 
 
         //
         public void Close() {
+            if(!_connected) { Print($"[Websocket]: Socket is not open (Nothing Happens)", 2); return; }
+
             cts.Cancel();
-            //Disconnect();
         }
 
 
@@ -92,6 +104,8 @@ namespace ShimamuraBot
         /// <returns>nothing</returns>
         private async Task Disconnect()
         {
+            cts.Cancel();
+            /*
             _connected = false;
 
             if (WSSClient.State == WebSocketState.Closed || WSSClient.State == WebSocketState.Aborted || WSSClient.State == WebSocketState.CloseSent) {
@@ -103,7 +117,7 @@ namespace ShimamuraBot
             while(WSSClient.State != WebSocketState.Closed)
                 Thread.Sleep(100);
 
-            Print($"[WSSClient]: Socket shutdown gracefully. Please come again.", 1);
+            Print($"[WSSClient]: Socket shutdown gracefully. Please come again.", 1);*/
         }
 
 
@@ -245,153 +259,54 @@ namespace ShimamuraBot
         #endregion
         #endregion
 
-        //
-        private void whatifIMessageQueued()
-        {
-
-        }
-
-        //what I'mma use chatdumbpg34 when I can
-        private void IterateJsonElement(JsonElement element)
-        {
-            foreach (JsonProperty property in element.EnumerateObject())
-            {
-                string key = property.Name;
-                JsonElement value = property.Value;
-
-                Print($"[JSON]: Key: {key}", 0);
-
-                if (value.ValueKind == JsonValueKind.Object)
-                    IterateJsonElement(value);
-                else if (value.ValueKind == JsonValueKind.Array)
-                {
-                    //Console.WriteLine("Array found:");
-                    foreach (var arrayElement in value.EnumerateArray()) //fuck arrays
-                    {
-                        // Handle or iterate the array elements
-                        // If they are objects, you can call IterateJsonElement(arrayElement)
-                    }
-                } else {
-                    // It's a simple value (string, number, etc.)
-                    Print($"[JSON]: Value: {value}", 0);
-                }
-            }
-        }
 
         public void onMessage(string data) {
-            //var msg = JsonSerializer.Deserialize<JSONDataStruct>(data);
+            //ignore pings - maybe check if pings stop could be a socket issue.
+            if(data.Contains("ping"))  return;
 
-            /*dynamic msg = JsonSerializer.Deserialize<dynamic>(data);
-
-            Print($"[WSS.onMessage]: {msg.identifier} {msg.message}", 0);
-
-            dynamic msg2 = JsonSerializer.Deserialize<dynamic>(msg.message);
-
-            Print($"[WSS.onMessage]: {msg2.type} --- {msg2}", 0);*/
-
-            ///lord jesus help me sweet baby jesus
-            ///
-            //Print($"[WSSClient]: SAFETY DUMP: \n{data}\n\n", 0);
-
-            if(data.Contains("ping")) { /*Print($"[WSSClient]: noop", 0);*/ return;  }
-
-            if(data.Contains("confirm_subscription"))
-            {
-                Print($"[JSON]: I'm in.\nWhat? I couldn't resist, jesus give me a break.", 0);
+            if(data.Contains("confirm_subscription")) {
+                Print($"[Shimamura]: Connected to chat!", 1);
                 return;
             } else if(data.Contains("reject_subscription")) {
-                Print($"[JSON]: reject_subscription", 0);
+                Print($"[Shimamura]: Could not connect to chat. Make sure everything is correctly configured.", 1);
                 return;
             }
 
             if (!data.Contains("\"message\":")) return;
 
-            JsonNode jsonNode = JsonNode.Parse(data); //message.event
-            //JsonNode Msgf = JsonNode.Parse((string)jsonNode!["message"]!);
+            JsonNode jsonNode = JsonNode.Parse(data);
 
             string eventType = (string)jsonNode["message"]!["event"]!;
-            Print($"[JSON]: Plwese work: {eventType}",0);
 
-            switch (eventType) //dejavu I've been here beforoeoro iterating over an object and digging in deeper and deeper and deeppppppppppppppperrrrrrrrrrrrrrrrrrrrrrrrr 
-            {
-                case "StreamEvent":
+            switch (eventType)  {
+                case "StreamEvent": //deserialize Root StreamEvent class
                     var streamEvent = JsonSerializer.Deserialize<RootStreamEvents>(data);
                     Print($"[StreamEvent]: idk shit happened :: {streamEvent.message.text}", 1);
+                    WriteToFileShrug(eventType, new string[] { streamEvent.message.createdAt.ToString(), streamEvent.message.text, $"who: {streamEvent.message.metadataObject.who}::", $"what: {streamEvent.message.metadataObject.what}" });
                     break;
-                case "ChatMessage":
+                case "ChatMessage": //deserialize Root ChatMessage class
                     var msg = JsonSerializer.Deserialize<RootMessageEvent>(data);
                     if (msg.message.visibility != "public") return;
 
                     Print($"[Chat]: {msg.message.author.username}: {msg.message.text}", 1);
+                    WriteToFileShrug(eventType, new string[] { msg.message.createdAt.ToString(), $"{msg.message.author.username}: {msg.message.text}" });
+                    if (msg.message.text.StartsWith(".duck")) vCat.Redeem("duck");
+                    else if (msg.message.text.StartsWith(".yeet")) vCat.Redeem("yeet");
                     break;
-                case "UserPresence":
+                case "UserPresence": //deserialize Root UserPresence class
                     var presencemsg = JsonSerializer.Deserialize<RootPresenceEvent>(data);
                     var eveType = presencemsg.message.type == "enter_stream" ? "Entered the chat" : "Left the chat";
-                    Print($"[Presence]: {presencemsg.message.text} {eveType}!", 1);
+                    WriteToFileShrug(eventType, new string[] { presencemsg.message.createdAt.ToString(), $"{presencemsg.message.text} {eveType}" });
+                    //Print($"[Presence]: {presencemsg.message.text} {eveType}!", 1);
                     break;
-                default:
-                    Print($"[JSON]: ehh hi", 2);
-                    break;
-            }
-            return;
-
-            dynamic typeOfData = JsonSerializer.Deserialize<dynamic>(data);
-            IterateJsonElement(typeOfData);
-            return;
-            if (typeOfData is JsonElement jsonElement && jsonElement.ValueKind == JsonValueKind.Object) {
-                foreach (JsonProperty f in jsonElement.EnumerateObject())
-                {
-                    Print($"[JSON]: k: {f.Name}, v: {f.Value}\n", 0); //now to fix this shit
-                    if(f.Name == "message")
-                    {
-                        var moo = "";
-                        
-                    }
-                }
-            }
-            //^ that's going to explode or print some shit like system.net.json.object.penis
-
-            //try catch JSONBinding or some shit
-
-            string values = typeOfData.message.@event; //might be better to try 'type' not 'event' //yoink 470a4687924f9561b55f990c6e624800c7108109e84fc88e0598d641e36b7e9f
-
-            switch (values)
-            {
-                case "StreamEvent":
-                    Print($"[JSON]: Received StreamEvent - \n{data}\n", 0);
-                    break;
-                case "ChatMessage":
-                    Print($"[JSON]: Received ChatMessage - \n{data}\n", 0);
-                    break;
-                case "confirm_subscription" or "reject_subscription":
-                    Print($"[JSON]: Received This won't happen - \n{data}\n", 0);
-                    break;
-                case "UserPresence":
-                    Print($"[JSON]: Received UserPresence - \n{data}\n", 0);
-                    break;
-                default:
-                    Print($"[JSON]: ehh hi", 0);
+                default: //This shouldn't trigger but if it does capture it so I can inspect what went wrong
+                    Print($"[JSONParser]: There was an unexpected request :: eventType: {eventType}, Json Dump: {data}", 3);
                     break;
             }
-
-            if(data.Contains("StreamEvent"))
-            {
-                //deserialz chatmessage
-            }
-            else if(data.Contains("ChatMessage"))
-            {
-                //dersialz streamevent
-            } else if(data.Contains(""))
-            {
-                //try dynamic
-            }
-
-            //Print($"[WSSClient]: I died. {data}", 0);
         }
 
         public void FidgetyStuff(string msg) {
-            switch (msg.ToLower())
-            {
+            switch (msg.ToLower()) {
                 case "ping":
                     break;
                 case "test":
@@ -448,14 +363,7 @@ namespace ShimamuraBot
 
             var fuckoff = "{\"command\":\"" + data + "\",\"identifier\":\"" + c + "\"}";
             Print($"[JSON]: You are preparing to send this shit: \n\n{fuckoff}\n\n", 0);
-            //JObject o = new JObject {{ "command", data },{ "identifier", fuckoff }};
-
-            //Print($"{o.ToString()}", 0);
-
-            //JArray jsonarray = new JArray();
-
-
-            //var a = JSONobjToString(GATEWAY_IDENTIFIER);
+            
 
 
             object obi = new
@@ -483,7 +391,69 @@ namespace ShimamuraBot
         }
 
 
-        public async Task Listen(CancellationToken ctx) //todo: optimize
+        private async Task startWebsocket() {
+            cts = new CancellationTokenSource();
+            ctx = cts.Token;
+
+            using(ClientWebSocket socket = new ClientWebSocket()) {
+                try {
+                    socket.Options.SetRequestHeader("Sec-WebSocket-Protocol", "actioncable-v1-json");
+                    await socket.ConnectAsync(new Uri(WSS_GATEWAY), ctx);
+                    _connected = true;
+
+                    byte[] buffer = new byte[4096]; //1024 bytes IF the header Sec-Websocket-Maximum-Message-Size is detected, then that is the maximum size the buffer can be to prevent DDoSing.
+                    Task<WebSocketReceiveResult> listenTask;
+                    WebSocketReceiveResult listenResult;
+
+                    while (socket.State == WebSocketState.Open && !ctx.IsCancellationRequested) {
+                        listenTask = socket.ReceiveAsync(new ArraySegment<byte>(buffer), default); // yay I was right//I think it's aborting on cancel receive but I'm too lazy to google.
+                        var complete = await Task.WhenAny(Task.Delay(Timeout.Infinite, ctx), listenTask);
+
+                        if (complete != listenTask) break;
+
+                        listenResult = await listenTask;
+
+                        if (listenResult.MessageType == WebSocketMessageType.Text) {
+                            string message = Encoding.UTF8.GetString(buffer, 0, listenResult.Count);
+                            onMessage(message);
+                            continue;
+                        } else if (listenResult.MessageType == WebSocketMessageType.Close) {
+                            Print($"[Websocket]: {WSS_HOST} closed the socket with Code: {(int)listenResult.CloseStatus}", 1);
+                            cts.Cancel();
+                            break;
+                        } else {
+                            Print($"[Websocket]: Unhandled Exception {listenResult.MessageType.ToString()}", 3);
+                            if (socket.State == WebSocketState.Closed || socket.State == WebSocketState.Aborted) break;
+                        }
+                    }
+
+                    if(ctx.IsCancellationRequested && socket.State == WebSocketState.Open) { //normal closure by user
+                        Print($"[Websocket]: Closing socket to {WSS_HOST}...", 0);
+                        await socket.CloseAsync(WebSocketCloseStatus.NormalClosure, "FaretheWell", default);
+                        _connected = false;
+                        Print($"[Websocket]: Socket successfully closed", 1);
+                    }
+                    //anything broken;
+                } catch (System.Net.WebSockets.WebSocketException wse) { //General Failure
+                    Print($"[Websocket]: WebsocketException :: {wse}", 3);
+                    _faulted = true;
+                    cts.Cancel();
+                }
+                catch (Exception ex) { //WHO KNOWS?!
+                    Print($"[Websocket]: Unhandle exception :: {ex}", 3);
+                } finally {
+                    if(_faulted) {
+                        _connected = false;
+                        cts.Cancel();
+                        Print("[Websocket]: Socket faulted (CORE DUMPED)  :)", 0);
+                        Connect();
+                    }
+                }
+            }
+        }
+
+
+        /* public async Task Listen(CancellationToken ctx) //todo: optimize
         {
             //if (!_connected) { Print($"[WSSClient]: Could not listen to socket, as it is not open.", 3); return; }
             while(WSSClient.State != WebSocketState.Open) { Thread.Sleep(11); } 
@@ -492,6 +462,7 @@ namespace ShimamuraBot
             byte[] buffer = new byte[4096]; //1024 bytes IF the header Sec-Websocket-Maximum-Message-Size is detected, then that is the maximum size the buffer can be to prevent DDoSing.
             Task<WebSocketReceiveResult> resultTask;
             WebSocketReceiveResult result;
+            bool _faulted = false;
             while (WSSClient.State == WebSocketState.Open && !ctx.IsCancellationRequested)
             {
                 try {
@@ -501,19 +472,17 @@ namespace ShimamuraBot
 
                     if (complete == cancelreceiver) break;
                     
+                     /// System.Net.WebSockets.WebSocketException: 'The remote party closed the WebSocket connection without completing the close handshake.'
+                     /// This exception was originally thrown at this call stack:
+                     /// [External Code]
+                     /// ShimamuraBot.WebsocketClient.Listen(System.Threading.CancellationToken) in WebsocketClient.cs
+                     
                     result = await resultTask;
 
-                    if (result.MessageType == WebSocketMessageType.Text)
-                    {
+                    if (result.MessageType == WebSocketMessageType.Text) {
                         string message = Encoding.UTF8.GetString(buffer, 0, result.Count);
                         onMessage(message);
                         continue;
-
-                        if (message.Contains("{\"type\":\"welcome\"}"))
-                        {
-                            //Task.Run(() => Subscribe("connect", false, cancellationToken));
-                            //Task.Run(() => Subscribe("subscribe", false, cancellationToken));
-                        }
                     } else if (result.MessageType == WebSocketMessageType.Close) {
                         Print($"[WSSClient]: Remote {WSS_HOST} closed the socket with Websocket Code: {(int)result.CloseStatus}", 1);
                         return;
@@ -521,16 +490,24 @@ namespace ShimamuraBot
                         Print($"[WSSClient]: Unhandled Exception {result.MessageType.ToString()}", 3);
                         if (WSSClient.State == WebSocketState.Closed) return;
                     }
-                }
-                catch (TaskCanceledException)
-                {
+                } catch (TaskCanceledException) {
                     Print($"[WSSClient]: Task was cancelled.", 1);
                     break; // Exit the loop if the task was cancelled
-                }
-                catch (Exception ex)
-                {
+                } catch (System.Net.WebSockets.WebSocketException wssException) {
+                    if(wssException.WebSocketErrorCode == WebSocketError.Faulted) {
+                        Print($"[WSSClient]: Socket closed unexpectedly", 2);
+                        _faulted = true;
+                        break;
+                    }
+                } catch (Exception ex) {
                     // Handle other exceptions
                     Print($"[WSSClient]: Exception: {ex.Message}", 3); //it's scary that it knew that 3 was Error code. and 1 is normal status I've never shown it my print code, so deduced it
+                } finally {
+                    if (_faulted) {
+                        Print($"[WSSClient]: Attempting to reconnect to {WSS_HOST}", 1);
+                        cts.Cancel();
+                        Connect();
+                    }
                 }
             }
 
@@ -543,9 +520,9 @@ namespace ShimamuraBot
             if (!ctx.IsCancellationRequested && WSSClient.State != WebSocketState.Open)
                 Print($"[WSSClient]: Socket closed remotely from {WSS_HOST}", 3);
 
-            Print($"[WSSClient]: Bye.", 4);
+            //Print($"[WSSClient]: Bye.", 4);
             Disconnect(); //if it's not already closed properly
-        }
+        } */
 
 
 

@@ -233,7 +233,7 @@ namespace ShimamuraBot
                         Print($"exp - Shows how many seconds are left until your token expires", 1);
                         Print($"logging - Toggle logging on/off", 1);
                         Print($"listen - Starts the HTTPServer (deprecate)", 1);
-                        Print($"stoplisten - Stops the HTTPServer (depcreate)", 1);   
+                        Print($"stoplisten - Stops the HTTPServer (use this if the temporary Webserver doesn't shutdown for some reason)", 1);   
                         Print($"exit or quit - Exits the program gracefully", 1);
                         break;
                     default:
