@@ -5,14 +5,14 @@ A Personal Chatbot for Joystick.TV. Host it from your home computer or remote se
 ## Install
 Download the [Latest Release]todo
 
-Next create a `.env` file inside the directory of the bot. This will contain your credentials and some settings such as logging.
-The basic requirements for this file are:
 ```
 HOST=THE_HOST_WITH_HTTPS_SCHEME
 CLIENT_ID=YOUR_CLIENT_ID
 CLIENT_SECRET=YOUR_CLIENT_SECRET
 WSS_HOST=THE_WSS_ENDPOINT
 ```
+Extract the Files to the Folder of your choice.  
+Open up your `.env` File in the Text Editor of your choice for the next step.  
 
 **NEVER SHARE YOUR `.env` FILE**
 
@@ -26,12 +26,15 @@ Fill out the application.
 `CLIENT_SECRET` will be your `OAuth Client Secret`  
 `WSS_HOST` can be referenced from [Joystick Support](https://support.joystick.tv/developer_support/) search for `WSS` it should be `wss://joystick.tv/cable`  
 
+Now when you have all the entries in your `.env` filled out with your bot application values, you're ready to run the bot.
 
-Now you're ready to run the application.  
-After Authorizing the bot you will see new entries in your `.env` file.  
-Currently the only optional one is `LOGGING` which defaults to `False`, which you can change to `True` if you wish to enable logging of chat/events
+**Commands:**  
+- `logging` toggles logging on/off to `shimamura.log`
+- `help` (display all options)
+- `start` (start the bot)
+- `stop` (stop the bot)
 
-
+<p>if you run into any problems please submit an [issue here](#issues)</p>
 
 ## Compile
 <p>TODO</p><br /><br />

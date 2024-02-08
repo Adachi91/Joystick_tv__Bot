@@ -194,9 +194,9 @@ namespace ShimamuraBot
                         if(OAuthClient.checkJWT()) {
                             WSS_GATEWAY = $"{WSS_HOST}?token={ACCESS_TOKEN}";
                             wss.Connect();
-                            Task.Run(() => wss.Listen(wss.ctx));
+                            //Task.Run(() => wss.Listen(wss.ctx));
 
-                            wss.sendMessage("subscribe");
+                            //wss.sendMessage("subscribe");
                         } else
                             tempWebserver.Start();
                         break;

@@ -53,6 +53,8 @@ namespace ShimamuraBot
         public WebsocketClient(bool _history = false)
         {
             if (_history) saveHistory = true;
+            _connected = false;
+            _faulted = false;
 
             //WSSClient = new ClientWebSocket();
             //WSSClient.Options.AddSubProtocol("actioncable-v1-json");
@@ -82,11 +84,14 @@ namespace ShimamuraBot
 
 
         public async Task Connect() {
-            //if(WSSClient != null) { WSSClient.Dispose(); }
+            if(WSSClient != null) { WSSClient.Dispose(); }
             if(_connected) { Print($"[Websocket]: Socket already in use", 2); return; }
             if(_faulted) { Print($"[Websocket]: Attempting to reconnect to {WSS_HOST}", 1); _faulted = false; }
 
-            Task.Run(() => { startWebsocket(); });
+            WSSClient = new ClientWebSocket();
+            WSSClient.Options.AddSubProtocol("actioncable-v1-json");
+
+            Task.Run(() => { startWebsocket(); sendMessage("subscribe"); });
         }
 
 
@@ -362,7 +367,7 @@ namespace ShimamuraBot
             var c = "{\\\"channel\\\":\\\"GatewayChannel\\\",\\\"streamer\\\":\\\"adachi91\\\"}";
 
             var fuckoff = "{\"command\":\"" + data + "\",\"identifier\":\"" + c + "\"}";
-            Print($"[JSON]: You are preparing to send this shit: \n\n{fuckoff}\n\n", 0);
+            //Print($"[JSON]: You are preparing to send this shit: \n\n{fuckoff}\n\n", 0);
             
 
 
@@ -381,8 +386,8 @@ namespace ShimamuraBot
             //foreach (byte boot in buffer)
             //Print($"\n{boot:X2}", 0);
 
-            int timeout = 10;
-            while (WSSClient.State != WebSocketState.Open) { Thread.Sleep(500); timeout--; if (timeout <= 0) { Print($"YOU DONE FUCKED UP TIMEOUT BITCH", 4); break; } }
+            int timeout = 50;
+            while (WSSClient.State != WebSocketState.Open) { Thread.Sleep(100); timeout--; if (timeout <= 0) { Print($"YOU DONE FUCKED UP TIMEOUT BITCH", 4); break; } }
             //Print($"\n\n\n\n", 0);
             if (WSSClient.State == WebSocketState.Open)
                 WSSClient.SendAsync(buffer, WebSocketMessageType.Text, true, ctx);
@@ -395,18 +400,18 @@ namespace ShimamuraBot
             cts = new CancellationTokenSource();
             ctx = cts.Token;
 
-            using(ClientWebSocket socket = new ClientWebSocket()) {
+            //using(ClientWebSocket socket = new ClientWebSocket()) {
                 try {
-                    socket.Options.SetRequestHeader("Sec-WebSocket-Protocol", "actioncable-v1-json");
-                    await socket.ConnectAsync(new Uri(WSS_GATEWAY), ctx);
+                    //socket.Options.SetRequestHeader("Sec-WebSocket-Protocol", "actioncable-v1-json");
+                    await WSSClient.ConnectAsync(new Uri(WSS_GATEWAY), ctx);
                     _connected = true;
 
                     byte[] buffer = new byte[4096]; //1024 bytes IF the header Sec-Websocket-Maximum-Message-Size is detected, then that is the maximum size the buffer can be to prevent DDoSing.
                     Task<WebSocketReceiveResult> listenTask;
                     WebSocketReceiveResult listenResult;
 
-                    while (socket.State == WebSocketState.Open && !ctx.IsCancellationRequested) {
-                        listenTask = socket.ReceiveAsync(new ArraySegment<byte>(buffer), default); // yay I was right//I think it's aborting on cancel receive but I'm too lazy to google.
+                    while (WSSClient.State == WebSocketState.Open && !ctx.IsCancellationRequested) {
+                        listenTask = WSSClient.ReceiveAsync(new ArraySegment<byte>(buffer), default); // yay I was right//I think it's aborting on cancel receive but I'm too lazy to google.
                         var complete = await Task.WhenAny(Task.Delay(Timeout.Infinite, ctx), listenTask);
 
                         if (complete != listenTask) break;
@@ -423,13 +428,13 @@ namespace ShimamuraBot
                             break;
                         } else {
                             Print($"[Websocket]: Unhandled Exception {listenResult.MessageType.ToString()}", 3);
-                            if (socket.State == WebSocketState.Closed || socket.State == WebSocketState.Aborted) break;
+                            if (WSSClient.State == WebSocketState.Closed || WSSClient.State == WebSocketState.Aborted) break;
                         }
                     }
 
-                    if(ctx.IsCancellationRequested && socket.State == WebSocketState.Open) { //normal closure by user
+                    if(ctx.IsCancellationRequested && WSSClient.State == WebSocketState.Open) { //normal closure by user
                         Print($"[Websocket]: Closing socket to {WSS_HOST}...", 0);
-                        await socket.CloseAsync(WebSocketCloseStatus.NormalClosure, "FaretheWell", default);
+                        await WSSClient.CloseAsync(WebSocketCloseStatus.NormalClosure, "FaretheWell", default);
                         _connected = false;
                         Print($"[Websocket]: Socket successfully closed", 1);
                     }
@@ -449,7 +454,7 @@ namespace ShimamuraBot
                         Connect();
                     }
                 }
-            }
+            //}
         }
 
 
