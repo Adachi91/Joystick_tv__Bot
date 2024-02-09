@@ -40,7 +40,7 @@ namespace ShimamuraBot
                 cts = new CancellationTokenSource();
                 cancelToken = cts.Token;
 
-                var state = OAuthClient.Generatestate();
+                _OAuthPtr.State = OAuthClient.Generatestate();
 
                 Task.Run(() => StartAsync(_OAuthPtr, cancelToken));
                 openBrowser(_OAuthPtr.Auth_URI.ToString() + $"?client_id={CLIENT_ID}&scope=bot&state={_OAuthPtr.State}");
