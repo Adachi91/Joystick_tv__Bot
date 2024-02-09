@@ -127,7 +127,11 @@ namespace ShimamuraBot
                 }
             }
 
-            envManager.load();
+            try { //I really over do stuff. like is this made for a 3 year old to run?
+                envManager.load();
+            } catch (Exception ex) {
+                Print($"[Environment]: {ex}", 3);
+            }
 
             oAuth = new OAuthClient(
                 HOST,
@@ -180,12 +184,8 @@ namespace ShimamuraBot
                         Print("", 0);
                         break;
                     case "test":
-                        
-                        break;
-                    case "fuck":
-                        //wss.bakeacake(new { });
-                        wss.sendMessage("unsubscribe");
-                        wss.Close();
+                        var t = wss.testMessage("asdf");
+                        Print($"[ShimamuraJSON]: {t}", 0);
                         break;
                     case "exit" or "quit":
                         x = false;//MainLoop.Stop();
@@ -201,15 +201,8 @@ namespace ShimamuraBot
                             tempWebserver.Start();
                         break;
                     case "stop":
-                        Print($"[MainThread]: Attempting to close socket", 0);
-                            wss.Close();
-                        break;
-                    case "config"://ehhhhhhhh drake this one
-                        var t = Task.Run(() => {
-                            oAuth.callmewhateverlater(1);
-                        });
-                        Print("Idk - dumped oauth code to oauth2.txt", 4);
-                        //TODO: settings
+                        Print($"[Shimamura]: Stopping bot", 1);
+                            wss.Close(-1);
                         break;
                     case "listen"://PRUNE AFTER FLOW HAS BEEN COMPLETE.
                         tempWebserver.Start();
@@ -217,14 +210,15 @@ namespace ShimamuraBot
                     case "stoplisten"://PRUNE  AFTER FLOW HAS BEEN COMPLETE.
                         tempWebserver.Stop();
                         break;
-                    case "vcat"://PRUNE
-                        vCat.Redeem("meow");
-                        break;
                     case "exp":
-                        Print($"[Info]: Token expires in {APP_JWT_EXPIRY - GetUnixTimestamp()} seconds", 1);
+                        if (OAuthClient.checkJWT())
+                            Print($"[Info]: Token expires in {APP_JWT_EXPIRY - GetUnixTimestamp()} seconds", 1);
+                        else
+                            Print($"[Info]: You do not have a token yet, or it is expired.", 1);
                         break;
                     case "logging":
                         LOGGING_ENABLED = !LOGGING_ENABLED;
+                        updateKey("LOGGING", LOGGING_ENABLED.ToString());
                         if(LOGGING_ENABLED) Print($"[Logger]: logging is now enabled", 1); else Print($"[Logger]: logging is now disabled", 1);
                         break;
                     case "help":

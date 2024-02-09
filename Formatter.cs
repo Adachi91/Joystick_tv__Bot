@@ -54,8 +54,7 @@ namespace ShimamuraBot
         /// </summary>
         /// <param name="text">The Message</param>
         /// <param name="level">0:Debug, 1:Normal, Warn:2, Error:3, UniversalHeatDeath:4</param>
-        public static void Print(string text, int level)
-        {
+        public static void Print(string text, int level) { //https://en.wikipedia.org/wiki/ANSI_escape_code
             ConsoleColor current = Console.ForegroundColor;
             ConsoleColor debug = ConsoleColor.Cyan;
             ConsoleColor warn = ConsoleColor.Yellow;
@@ -66,14 +65,14 @@ namespace ShimamuraBot
             switch (level) {
                 case 0:
                     #if DEBUG
-                        Console.ForegroundColor = debug; Console.Write($" [Debug]{ctx[0]}:"); Console.ForegroundColor = current; Console.Write($" {ctx[1]}\r\n"); 
+                        Console.ForegroundColor = debug; Console.Write($" [Debug]{ctx[0]}:"); Console.ForegroundColor = current; Console.Write($" {ctx[1]}{Environment.NewLine}"); 
                     #endif
                     break;
                 case 1: ctx = formatPrint(text); Console.WriteLine($" [System]{ctx[0]}: {ctx[1]}");
                     break;
-                case 2: Console.ForegroundColor = warn; Console.Write($" [WARN]{ctx[0]}:"); Console.ForegroundColor = current; Console.Write($" {ctx[1]}\r\n");
+                case 2: Console.ForegroundColor = warn; Console.Write($" [WARN]{ctx[0]}:"); Console.ForegroundColor = current; Console.Write($" {ctx[1]}{Environment.NewLine}");
                     break;
-                case 3: Console.ForegroundColor = error; Console.Write($" [ERROR]{ctx[0]}:"); Console.ForegroundColor = current; Console.Write($" {ctx[1]}\r\n");
+                case 3: /*Console.Write($" \x1B[38;5;9m[ERROR]{ctx[0]}: {ctx[1]}\x1B[38;5;15m{Environment.NewLine}"); test to switch to ANSI escape, good idea? great? or horrible.. */ Console.ForegroundColor = error; Console.Write($" [ERROR]{ctx[0]}:"); Console.ForegroundColor = current; Console.Write($" {ctx[1]}{Environment.NewLine}"); WriteToFileShrug("ERROR", new string[] { $"{ctx[0]}: {ctx[1]}" });
                     break;
                 case 4:
                     Random rand = new Random();
@@ -88,7 +87,7 @@ namespace ShimamuraBot
 
 
         /// <summary>
-        /// Get the current UTC Unix Timestamp
+        ///  Get the current UTC Unix Timestamp
         /// </summary>
         /// <returns>(long) Timestamp</returns>
         public static long GetUnixTimestamp() {

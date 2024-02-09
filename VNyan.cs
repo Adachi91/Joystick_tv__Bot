@@ -19,7 +19,7 @@ namespace ShimamuraBot
         private CancellationTokenSource cts = new CancellationTokenSource();
         private CancellationToken cancelRequest = new CancellationToken();
 
-        public void Redeem(string type) {
+        public void Redeem(string type) { //TODO: add a check to make sure ws connectivity is available for vNyan otherwise return a user friendly message
             switch(type) {
                 case "yeet":
                     SendTovNyan("Test");
