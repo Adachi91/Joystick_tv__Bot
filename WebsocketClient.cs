@@ -56,9 +56,9 @@ namespace ShimamuraBot
         /// </summary>
         /// <returns></returns>
         public async Task Connect() {
-            if(socket != null) { socket.Dispose(); }
             if(_connected) { Print($"[Websocket]: Socket already in use", 2); return; }
             if(_faulted) { Print($"[Websocket]: Attempting to reconnect to {WSS_HOST}", 1); _faulted = false; }
+            if(socket != null) { socket.Dispose(); }
 
             socket = new ClientWebSocket();
             socket.Options.AddSubProtocol("actioncable-v1-json");

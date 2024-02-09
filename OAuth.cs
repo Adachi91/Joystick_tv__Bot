@@ -141,7 +141,6 @@ namespace ShimamuraBot
                 APP_JWT_REFRESH = respData.refresh_token;
 
                 Print($"[JWT Parser]: Succesfully retrieved JWT from {HOST}", 0);
-                WSS_GATEWAY = $"{WSS_HOST}?token={APP_JWT}";
             } catch (Exception ex) {
                 Print($"[JWT Parser]: There was an error parsing the response from {HOST}\n{ex}\n", 3);
             }

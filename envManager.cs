@@ -45,7 +45,7 @@ namespace ShimamuraBot
 
             ACCESS_TOKEN = Convert.ToBase64String(Encoding.UTF8.GetBytes($"{CLIENT_ID}:{CLIENT_SECRET}"));
             GATEWAY_IDENTIFIER = new { channel = "GatewayChannel" };
-            //WSS_GATEWAY = $"{WSS_HOST}?token={ACCESS_TOKEN}"; //this needs to be set where JWT is handled.
+            WSS_GATEWAY = $"{WSS_HOST}?token={ACCESS_TOKEN}"; //not anymore :) //this needs to be set where JWT is handled.
             if (!string.IsNullOrEmpty(tmp)) APP_JWT_EXPIRY = Convert.ToInt64(tmp);
             if(!string.IsNullOrEmpty(_logging)) LOGGING_ENABLED = Convert.ToBoolean(_logging);
         }

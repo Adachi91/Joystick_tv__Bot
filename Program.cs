@@ -192,7 +192,6 @@ namespace ShimamuraBot
                         break;
                     case "start" or "run": //TOSTAY
                         if(OAuthClient.checkJWT()) {
-                            WSS_GATEWAY = $"{WSS_HOST}?token={ACCESS_TOKEN}";
                             wss.Connect();
                             //Task.Run(() => wss.Listen(wss.ctx));
 
