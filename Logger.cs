@@ -18,14 +18,13 @@ namespace ShimamuraBot
         ///  Write to log file
         /// </summary>
         /// <param name="type">The event Type from WSSClient</param>
-        /// <param name="args">string[] - Args - The first MUST be DateTime</param>
+        /// <param name="args">string[DateTime, string, string]</param>
         /// <returns></returns>
         public static async Task WriteToFileShrug(string type, params string[] args) { //passed - Optimize
             if(!LOGGING_ENABLED && !Debugger.IsAttached) { return; }
 
             await _semaphore.WaitAsync();
-            try
-            {
+            try {
                 var date = Convert.ToDateTime(args[0]);
 
                 StringBuilder sb = new StringBuilder();

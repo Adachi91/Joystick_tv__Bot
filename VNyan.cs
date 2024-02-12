@@ -30,6 +30,9 @@ namespace ShimamuraBot
                 case "meow":
                     SendTovNyan("meow");
                     break;
+                case "tta":
+                    SendTovNyan("tta");
+                    break;
                 default:
                     break;
             }

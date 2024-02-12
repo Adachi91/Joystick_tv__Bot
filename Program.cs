@@ -177,6 +177,12 @@ namespace ShimamuraBot
             var x = true;
             while (x) {
                 string input = Console.ReadLine();
+                var msg = "";
+                if(input.StartsWith("test")) {
+                    var tmp = input.Split(" ", 2, StringSplitOptions.RemoveEmptyEntries);
+                    input = tmp[0];
+                    msg = tmp[1];
+                }
 
                 switch (input.ToLower())
                 {
@@ -184,7 +190,8 @@ namespace ShimamuraBot
                         Print("", 0);
                         break;
                     case "test":
-                        var t = wss.testMessage("asdf");
+                        var t = wss.testMessage(msg);
+                        //t.Replace("\\u0022", "f");
                         Print($"[ShimamuraJSON]: {t}", 0);
                         break;
                     case "exit" or "quit":

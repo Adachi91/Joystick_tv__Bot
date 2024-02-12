@@ -9,6 +9,7 @@ using System.Text.Json.Nodes;
 using System.Collections.Generic;
 using System.Text.Encodings.Web;
 using System.Runtime.InteropServices.JavaScript;
+using System.ComponentModel;
 
 namespace ShimamuraBot
 {
@@ -20,19 +21,30 @@ namespace ShimamuraBot
          * The Close frame contains an opcode of 0x8.
          * The application MUST NOT send any more data frames after sending a Close frame.
          *  If there is a body, the first two bytes of
-   the body MUST be a 2-byte unsigned integer (in network byte order)
-   representing a status code with value /code/ defined in Section 7.4.
-   Following the 2-byte integer, the body MAY contain UTF-8-encoded data
-   with value /reason/
-         * 1000 indicates a normal closure, meaning that the purpose for which the connection was established has been fulfilled.
+         *  the body MUST be a 2-byte unsigned integer (in network byte order)
+         *  representing a status code with value /code/ defined in Section 7.4.
+         *  Following the 2-byte integer, the body MAY contain UTF-8-encoded data
+         *  with value /reason/
+         *  
+         * > 1000 indicates a normal closure, meaning that the purpose for which the connection was established has been fulfilled.
          * 1001 indicates that an endpoint is "going away", such as a server going down or a browser having navigated away from a page.
          * 1002 indicates that an endpoint is terminating the connection due to a protocol error.
          * 1003 indicates that an endpoint is terminating the connection because it has received a type of data it cannot accept (e.g., an endpoint that understands only text data MAY send this if it receives a binary message).
+         * 1004 Reserved.  The specific meaning might be defined in the future.
+         * 1005 is a reserved value and MUST NOT be set as a status code in a Close control frame by an endpoint.  It is designated for use in applications expecting a status code to indicate that no status code was actually present.
+         * 1006 is a reserved value and MUST NOT be set as a status code in a Close control frame by an endpoint.  It is designated for use in applications expecting a status code to indicate that the connection was closed abnormally, e.g., without sending or receiving a Close control frame.
+         * > 1007 indicates that an endpoint is terminating the connection because it has received data within a message that was not consistent with the type of the message (e.g., non-UTF-8 [RFC3629] data within a text message).
+         * 1008 indicates that an endpoint is terminating the connection because it has received a message that violates its policy.  This is a generic status code that can be returned when there is no other more suitable status code (e.g., 1003 or 1009) or if there is a need to hide specific details about the policy.
+         * 1009 indicates that an endpoint is terminating the connection because it has received a message that is too big for it to process.
+         * 1010 indicates that an endpoint (client) is terminating the connection because it has expected the server to negotiate one or more extension, but the server didn't return them in the response message of the WebSocket handshake.  The list of extensions that
          */
 
         private bool _connected { get; set; } = false;
         private bool _faulted { get; set; } = false;
         private long _runtime { get; set; } = 0;
+        private int _reconnections { get; set; } = 0;
+        private long _TTLR { get; set; } = 0; //Time To Last Reconnect
+
         private ClientWebSocket socket;
         private CancellationTokenSource cts;
         private CancellationToken ctx;
@@ -46,8 +58,8 @@ namespace ShimamuraBot
         /// </summary>
         public WebsocketClient() //I can't really think of a reason to keep a constructor
         {
-            _connected = false;
-            _faulted = false;
+            //_connected = false;
+            //_faulted = false;
         }
 
 
@@ -57,7 +69,7 @@ namespace ShimamuraBot
         /// <returns></returns>
         public async Task Connect() {
             if(_connected) { Print($"[Websocket]: Socket already in use", 2); return; }
-            if(_faulted) { Print($"[Websocket]: Attempting to reconnect to {WSS_HOST}", 1); _faulted = false; }
+            //if(_faulted) { Print($"[Websocket]: Attempting to reconnect to {WSS_HOST}", 1); _faulted = false; }
             if(socket != null) { socket.Dispose(); }
 
             socket = new ClientWebSocket();
@@ -66,6 +78,22 @@ namespace ShimamuraBot
             Task.Run(() => { startWebsocket(); sendMessage("subscribe"); });
         }
 
+        /// <summary>
+        ///  Prevent mass flood of Connect attempts by slowing down the flow each error.
+        /// </summary>
+        /// <returns></returns>
+        private async Task Reconnect() {
+            if (!_faulted) return;
+
+            Print($"[Websocket]: Socket faulted. Attempting to re-establish connection with {WSS_HOST}. n({_reconnections})", 1);
+
+            if (GetUnixTimestamp() - _TTLR > 300) { _TTLR = GetUnixTimestamp(); _reconnections = 0; } //reset "Time To Last Reconnect" and attempts after 5 minutes
+
+            Task.Delay((1000 * _reconnections)).Wait(); //instant, 1, 2, 3, 4 ,5 seconds
+            if(_reconnections < 5) _reconnections++;
+
+            Connect();
+        }
 
         /// <summary>
         ///  Gracefully closes the Websocket Client
@@ -226,7 +254,7 @@ namespace ShimamuraBot
         #endregion
 
         #region OutboundRootMessage
-        public class OutboundMessageRoot
+        /*public class OutboundMessageRoot
         {
             public string Command { get; set; }
             public string Identifier => JsonSerializer.Serialize(new IdentifierObject { Channel = "GatewayChannel" });
@@ -235,18 +263,30 @@ namespace ShimamuraBot
             public OutboundData DataObject { get; set; }
 
             public string Data => JsonSerializer.Serialize(DataObject);
+        }*/
+        public class OutboundMessageRoot {
+            public string command { get; set; }
+
+            [JsonIgnore]
+            public IdentifierObject IdentifierObject { get; set; }
+
+            public string identifier => JsonSerializer.Serialize(IdentifierObject);//, new JsonSerializerOptions { WriteIndented = true });
+
+            [JsonIgnore]
+            public OutboundData DataObject { get; set; }
+
+            public string data => JsonSerializer.Serialize(DataObject);//, new JsonSerializerOptions { WriteIndented = true });
         }
 
         public class IdentifierObject
         {
-            public string Channel { get; set; }
+            public string channel { get; set; }
         }
 
-        public class OutboundData
-        {
-            public string Action { get; set; }
-            public string Text { get; set; }
-            public string ChannelId { get; set; }
+        public class OutboundData {
+            public string action { get; set; }
+            public string text { get; set; }
+            public string channelId { get; set; }
         }
         #endregion
 
@@ -256,16 +296,22 @@ namespace ShimamuraBot
         {
             var outboundmessage = new OutboundMessageRoot
             {
-                Command = "message",
+                command = "message",
+                IdentifierObject = new IdentifierObject { channel = "GatewayChannel" },
+
                 DataObject = new OutboundData
                 {
-                    Action = "send_message",
-                    Text = "hello",
-                    ChannelId = "470a4687924f9561b55f990c6e624800c7108109e84fc88e0598d641e36b7e9f"
+                    action = "send_message",
+                    text = data,
+                    channelId = "470a4687924f9561b55f990c6e624800c7108109e84fc88e0598d641e36b7e9f"
                 }
             };
 
-            return JsonSerializer.Serialize<OutboundMessageRoot>(outboundmessage);
+            //var a = JsonSerializer.Serialize<OutboundMessageRoot>(outboundmessage);
+            var a = JsonSerializer.Serialize(outboundmessage);//, new JsonSerializerOptions { WriteIndented = true });
+
+            sendMessage("", a);
+            return a;
         }
 
         private void onMessage(string data) {
@@ -290,6 +336,11 @@ namespace ShimamuraBot
                 case "StreamEvent": //deserialize Root StreamEvent class
                     var streamEvent = JsonSerializer.Deserialize<RootStreamEvents>(data);
                     Print($"[StreamEvent]: idk shit happened :: {streamEvent.message.text}", 1);
+                    if(streamEvent.message.metadataObject.tipMenuItem == "Remove Bra") {
+                        vCat.Redeem("tta");
+                    }
+
+                    //write the code for events on tip
                     WriteToFileShrug(eventType, new string[] { streamEvent.message.createdAt.ToString(), streamEvent.message.text, $"who: {streamEvent.message.metadataObject.who}::", $"what: {streamEvent.message.metadataObject.what}" });
                     break;
                 case "ChatMessage": //deserialize Root ChatMessage class
@@ -300,6 +351,7 @@ namespace ShimamuraBot
                     WriteToFileShrug(eventType, new string[] { msg.message.createdAt.ToString(), $"{msg.message.author.username}: {msg.message.text}" });
                     if (msg.message.text.StartsWith(".duck")) vCat.Redeem("duck");
                     else if (msg.message.text.StartsWith(".yeet")) vCat.Redeem("yeet");
+                    else if (msg.message.text.StartsWith(".testing")) vCat.Redeem("tta");
                     break;
                 case "UserPresence": //deserialize Root UserPresence class
                     var presencemsg = JsonSerializer.Deserialize<RootPresenceEvent>(data);
@@ -358,15 +410,21 @@ namespace ShimamuraBot
         }
 
 
-        private async Task sendMessage(string data) {
+        private async Task sendMessage(string data, string debugdata = "") {
 
             ///{ "command": "subscribe",
             ///"identifier": "{\"channel\":\"GatewayChannel\",\"streamer\":\"joystickuser\"}" }
             //user_id backup
-            var c = "{\\\"channel\\\":\\\"GatewayChannel\\\",\\\"streamer\\\":\\\"adachi91\\\"}";
+            string fuckoff;
+            if (string.IsNullOrEmpty(debugdata))
+            {
+                var c = "{\\\"channel\\\":\\\"GatewayChannel\\\",\\\"streamer\\\":\\\"adachi91\\\"}";
 
-            var fuckoff = "{\"command\":\"" + data + "\",\"identifier\":\"" + c + "\"}";
-            //Print($"[JSON]: You are preparing to send this shit: \n\n{fuckoff}\n\n", 0);
+                fuckoff = "{\"command\":\"" + data + "\",\"identifier\":\"" + c + "\"}";
+            } else {
+                fuckoff = debugdata;    
+            }
+            Print($"[JSON]: You are preparing to send this shit: \n\n{fuckoff}\n\n", 0);
 
 
             ///var json = JsonSerializer.Serialize(obi);
@@ -388,6 +446,7 @@ namespace ShimamuraBot
             try {
                 await socket.ConnectAsync(new Uri(WSS_GATEWAY), ctx);
                 _connected = true;
+                _faulted = false;
 
                 byte[] buffer = new byte[4096]; //1024 bytes IF the header Sec-Websocket-Maximum-Message-Size is detected, then that is the maximum size the buffer can be to prevent DDoSing.
                 Task<WebSocketReceiveResult> listenTask;
@@ -425,18 +484,17 @@ namespace ShimamuraBot
                 //anything broken;
             }
             catch (System.Net.WebSockets.WebSocketException wse) { //General Failure
-                Print($"[Websocket]: WebsocketException - General Failure (Connectivity issue) - will attempt a reconnect", 3);
-                WriteToFileShrug("Error", new string[] { DateTime.UtcNow.ToString(), $"Connection to {HOST} was Reset." }); //best terminology? technically it's partially right.
+                
+                Print($"[Websocket]: WebsocketException - General Failure (Connectivity issue) - will attempt a reconnect", 3); //a massive loop was thrown into chaos here. I do not understand how it got into a Loop {} but once it was handled in Logger it stopped. Loop{} in ClientWebsocket class? it was a `System.Net.Sockets.SocketException` that snowballed it.
+                WriteToFileShrug("Error", new string[] { DateTime.UtcNow.ToString(), $"Connection to {WSS_HOST} was Reset" }); //best terminology? technically it's partially right.
                 _faulted = true;
                 _connected = false;
                 cts.Cancel();
+                Task.Delay(369).Wait(); //trying to keep it from overloading the logger
             } catch (Exception ex) { //WHO KNOWS?!
                 Print($"[Websocket]: Unhandle exception :: {ex}", 3);
             } finally {
-                if (_faulted) {
-                    Print("[Websocket]: Socket faulted (CORE DUMPED)  :)", 0);
-                    Connect();
-                }
+                if (_faulted) Reconnect();
             }
         }
 
