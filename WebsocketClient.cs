@@ -316,7 +316,7 @@ namespace ShimamuraBot
 
         private void onMessage(string data) {
             //ignore pings - maybe check if pings stop could be a socket issue.
-            if(data.Contains("ping"))  return;
+            if(data.StartsWith("{\"type\":\"ping\""))  return;
 
             if(data.Contains("confirm_subscription")) {
                 Print($"[Shimamura]: Connected to chat!", 1);
