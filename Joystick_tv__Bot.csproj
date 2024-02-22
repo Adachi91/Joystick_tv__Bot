@@ -14,7 +14,7 @@
 	<Deterministic>false</Deterministic>
     <RootNamespace>ShimamuraBot</RootNamespace>
     <AssemblyName>ShimamuraBot</AssemblyName>
-    <Version>1.2.0.0</Version>
+    <Version>1.4.6.0</Version>
     <ApplicationIcon>de8j64k_92250c71_aef9_4892_9433_d4c393b36aca_qpz_icon.ico</ApplicationIcon>
     <RunAnalyzersDuringLiveAnalysis>False</RunAnalyzersDuringLiveAnalysis>
     <AssemblyOriginatorKeyFile>AdachiSig.pfx</AssemblyOriginatorKeyFile>

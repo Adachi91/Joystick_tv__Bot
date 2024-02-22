@@ -35,16 +35,19 @@ namespace ShimamuraBot
         ///  Starts the HTTPListener for OAuth2 Loopback Flow
         /// </summary>
         /// <returns></returns>
-        public void Start() { //passed test
+        public async Task<bool> Start() { //passed test
             if (PortCheck()) {
                 cts = new CancellationTokenSource();
                 cancelToken = cts.Token;
 
                 _OAuthPtr.State = OAuthClient.Generatestate();
 
-                Task.Run(() => StartAsync(_OAuthPtr, cancelToken));
                 openBrowser(_OAuthPtr.Auth_URI.ToString() + $"?client_id={CLIENT_ID}&scope=bot&state={_OAuthPtr.State}");
+                //Task.Run(() => StartAsync(_OAuthPtr, cancelToken));
+                var tt = await StartAsync(_OAuthPtr, cancelToken);
+                return tt;
             }
+            return false;
         }
 
 
@@ -118,7 +121,8 @@ namespace ShimamuraBot
         /// <param name="OAuthPtr">Pointer to constructed OAuth Class</param>
         /// <param name="Token">Cancellation Token</param>
         /// <returns>null</returns>
-        private async Task StartAsync(OAuthClient OAuthPtr, CancellationToken Token) { //passed test
+        private async Task<bool> StartAsync(OAuthClient OAuthPtr, CancellationToken Token) { //passed test
+            bool _success = false;
             listener.Start();
             Print($"[HTTPServer]: Started on http://127.0.0.1:{LoopbackPort}/auth/", 1);
 
@@ -126,7 +130,7 @@ namespace ShimamuraBot
             try {
                 while (!Token.IsCancellationRequested) {
                     var contextTask = listener.GetContextAsync();
-                    var completedTask = await Task.WhenAny(contextTask, Task.Delay(Timeout.Infinite, Token));
+                    var completedTask = await Task.WhenAny(contextTask, Task.Delay(300_000, Token)); //timeout after 5 minutes
 
                     if (completedTask != contextTask) break;
 
@@ -137,13 +141,17 @@ namespace ShimamuraBot
 
                         if (!string.IsNullOrEmpty(listenerCtx.Request.QueryString["state"]))
                             if (listenerCtx.Request.QueryString["state"] == OAuthPtr.State)
-                                if (!string.IsNullOrEmpty(listenerCtx.Request.QueryString["code"]))
+                                if (!string.IsNullOrEmpty(listenerCtx.Request.QueryString["code"])) {
                                     OAuthPtr.OAuthCode = listenerCtx.Request.QueryString["code"];
-                                else
-                                    throw new Exception($"[HTTPServer]: Unable to Retrieve Authorization code from {HOST}");
+                                    _success = true;
+                                } else
+                                    throw new Exception($"Unable to Retrieve Authorization code from {HOST}");
                             else
-                                throw new Exception($"[HTTPServer]: The nounce returned by {HOST} was not a match");
+                                throw new Exception($"The nounce returned by {HOST} was not a match");
                     }
+
+                    if(!_success) //Hunting season if you will
+                        throw new Exception($"Timeout reached. Please try again.");
 
                     listenerCtx.Response.ContentType = "text/html";
                     await using (var writer = new StreamWriter(listenerCtx.Response.OutputStream))
@@ -152,13 +160,14 @@ namespace ShimamuraBot
                     Print($"[HTTPServer]: Successfully got OAuth2 code from {HOST}", 1);
                     cts.Cancel();
                 }
-            } catch (Exception ex) {
+            } catch (Exception ex) { //Tell me where'd you'd rather be?
                 Print($"[HTTPServer]: {ex.Message}", 3);
-            } finally {
+            } finally { //I can hardly see the moon
                 if (listener.IsListening)
                     listener.Stop();
                 Print($"[HTTPServer]: Shutting down.", 1);
             }
+            return _success;
         }
     }
 }

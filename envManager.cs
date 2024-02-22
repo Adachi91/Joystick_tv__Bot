@@ -4,24 +4,26 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using System.IO;
-//using static ShimamuraBot.Program; global usings
+using static System.Runtime.InteropServices.JavaScript.JSType;
 
 namespace ShimamuraBot
 {
     public static class envManager
     {
+        public static Dictionary<string, string> audioModule = new Dictionary<string, string>();
+        public static Dictionary<string, string> vtuberModule = new Dictionary<string, string>();
+
         /// <summary>
         ///  Loads the environment file
         /// </summary>
         /// <exception cref="Exception"></exception>
-        public static void load()
-        {
+        public static void load() {
             string tmp = null; //hold the long in a string for this type of switch to work.
             string _logging = null;
+
             foreach (var line in File.ReadAllLines(ENVIRONMENT_PATH)) {
+                if (line.StartsWith("#")) continue;
                 var split = line.Split('=', 2, StringSplitOptions.RemoveEmptyEntries);
-                //int a = line.IndexOf('=');
-                //var split = line.Split()
 
                 if (split.Length != 2) continue;
 
@@ -53,34 +55,31 @@ namespace ShimamuraBot
         /// <summary>
         ///  Writes Token information to the environment file
         /// </summary>
-        /// <param name="logging">(Optional)Boolean - Save all client events to log file.</param>
-        public static void write()
+        /// <param name="_defaults">(Optional)Boolean - Reset the .env file</param>
+        public static void write(bool _defaults = false)
         {
-            bool JWT_SET = false;
+            Dictionary<string, string> env;
 
-            List<string> env = File.ReadAllLines(ENVIRONMENT_PATH).ToList();
+            if(_defaults) {
+                env = new Dictionary<string, string> {
+                    ["HOST"] = "",
+                    ["CLIENT_ID"] = "YOUR_CLIENT_ID",
+                    ["CLIENT_SECRET"] = "YOUR_CLIENT_SECRET",
+                    ["WSS_HOST"] = "WSS_ENDPOINT",
+                };
+            } else {
+                string[] lines = File.ReadAllLines(ENVIRONMENT_PATH);
+                env = lines.Select(line => line.Split('=')).Where(parts => parts.Length == 2).ToDictionary(parts => parts[0], parts => parts[1]);
 
-            for (int i = 0; i < env.Count; i++) {
-                if (env[i].StartsWith("JWT=")){
-                    JWT_SET = true;
-                    env[i] = "JWT=" + APP_JWT;
-                } else if (env[i].StartsWith("JWT_REFRESH=")) {
-                    env[i] = "JWT_REFRESH=" + APP_JWT_REFRESH;
-                } else if (env[i].StartsWith("JWT_EXPIRE=")) {
-                    env[i] = "JWT_EXPIRE=" + APP_JWT_EXPIRY.ToString();
-                } else if (env[i].StartsWith("LOGGING=")) {
-                    env[i] = "LOGGING=" + LOGGING_ENABLED;
-                }
+                env["JWT"] = APP_JWT ?? "";
+                env["JWT_REFRESH"] = APP_JWT_REFRESH ?? "";
+                env["JWT_EXPIRE"] = APP_JWT_EXPIRY.ToString() ?? "";
+                env["LOGGING"] = LOGGING_ENABLED.ToString();
             }
 
-            if (!JWT_SET) {
-                env.Add("JWT=" + APP_JWT);
-                env.Add("JWT_REFRESH=" + APP_JWT_REFRESH);
-                env.Add("JWT_EXPIRE=" + APP_JWT_EXPIRY.ToString());
-                env.Add("LOGGING=" + LOGGING_ENABLED);
-            }
+            var values = env.Select(kv => $"{kv.Key}={kv.Value}");
 
-            File.WriteAllLines(ENVIRONMENT_PATH, env);
+            File.WriteAllLines(ENVIRONMENT_PATH, values);
         }
 
 
@@ -96,22 +95,88 @@ namespace ShimamuraBot
                 }
             }
 
-            if(_updated) {
-                File.WriteAllLines(ENVIRONMENT_PATH, fileLines);
-                Print($"[Environment]: {key} was updated", 0);
-            } else {
-                Print($"[Environment]: Couldn't find {key}", 0);
-            }
+            if(!_updated)
+                fileLines.Add($"{key}={value}");
+            File.WriteAllLines(ENVIRONMENT_PATH, fileLines);
+            Print($"[Environment]: {key} was updated", 0);
         }
 
+
+        public class Modules
+        {
+            private string path { get; set; }
+            private string name { get; set; }
+            private string command { get; set; }
+            private string application { get; set; }
+            private int value { get; set; }
+
+            private object VTS_Hotkey = new {
+                apiName = "VTubeStudioPublicAPI",
+                apiVersion = "1.0",
+                requestID = OAuthClient.Generatestate(),
+                messageType = "HotkeysInCurrentModelRequest",
+                data = new {
+                    modelID = "optional",
+                    live2DItemFileName = "optional"
+                }
+            };
+
+            ///private static
+
+                /*
+                 * 
+                 *  { //sound
+                 *      "application": "native",
+                 *      "path": "assets/sounds/a.wav",
+                 *      "name": "Alert1",
+                 *  }
+                 *  
+                 *  {
+                 *      "application": "vnyan",
+                 *      "command": "yeet",
+                 *     
+                 *  }
+                 */
+
+
+            public class VTS_AvailableHotkey
+            {
+                public string name { get; set; }
+                public string type { get; set; }
+                public string description { get; set; }
+                public string file { get; set; }
+                public string hotkeyID { get; set; }
+                public List<object> keyCombination { get; set; }
+                public int? onScreenButtonID { get; set; }
+            }
+
+            public class VTS_Data
+            {
+                public bool? modelLoaded { get; set; }
+                public string modelName { get; set; }
+                public string modelID { get; set; }
+                public List<VTS_AvailableHotkey> availableHotkeys { get; set; }
+            }
+
+            public class VTS_Root
+            {
+                public string apiName { get; set; }
+                public string apiVersion { get; set; }
+                public long? timestamp { get; set; }
+                public string requestID { get; set; }
+                public string messageType { get; set; }
+                public VTS_Data data { get; set; }
+            }
+
+        }
 
         /// <summary>
         ///  Load specific module settings such as vNyan, VTuber Studio, etc
         /// </summary>
         /// <param name="path">File Destination</param>
-        public static void load_Modules(string path) {
+        public static void load_Modules(string path) { ///I think I want to make this a different project and load it as a dll
             if(File.Exists(path)) {
-
+                
             } else {
                 Print($"[ModuleLoader]: Could not find the file specified", 3);
             }

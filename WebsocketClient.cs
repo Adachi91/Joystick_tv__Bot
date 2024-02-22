@@ -7,9 +7,10 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Text.Json.Nodes;
 using System.Collections.Generic;
-using System.Text.Encodings.Web;
-using System.Runtime.InteropServices.JavaScript;
-using System.ComponentModel;
+using static System.Runtime.InteropServices.JavaScript.JSType;
+//using System.Text.Encodings.Web;
+//using System.Runtime.InteropServices.JavaScript;
+//using System.ComponentModel;
 
 namespace ShimamuraBot
 {
@@ -41,15 +42,22 @@ namespace ShimamuraBot
 
         private bool _connected { get; set; } = false;
         private bool _faulted { get; set; } = false;
-        private long _runtime { get; set; } = 0;
+        private bool _userhalted { get; set; } = false;
+        private long _runtime { get; set; } = 0;//this was wrote with the intention of resetting the connection after say several days to clear memory usage, as this class consumes 90% of the programs resources
         private int _reconnections { get; set; } = 0;
         private long _TTLR { get; set; } = 0; //Time To Last Reconnect
+        private long _lastping { get; set; }
+        private string channelId { get; set; } = string.Empty;
+        private SemaphoreSlim messageSemaphore = new SemaphoreSlim(1, 1); //see sendMessage() method for exampliation
 
         private ClientWebSocket socket;
         private CancellationTokenSource cts;
         private CancellationToken ctx;
 
-        //modules
+        ///private ArraySegment<byte> sendBuffer;
+        ///private ArraySegment<byte> receiveBuffer;
+
+        //modules need to be instantiated here for access, maybe there is reason for constructor to pass which modules to load.
         private VNyan vCat = new VNyan();
 
 
@@ -67,45 +75,81 @@ namespace ShimamuraBot
         ///  Starts the Websocket Client and connects to WSS_HOST
         /// </summary>
         /// <returns></returns>
-        public async Task Connect() {
-            if(_connected) { Print($"[Websocket]: Socket already in use", 2); return; }
+        public async Task Connect()
+        {
+            if (_connected) { Print($"[Websocket]: Socket already in use", 2); return; }
             //if(_faulted) { Print($"[Websocket]: Attempting to reconnect to {WSS_HOST}", 1); _faulted = false; }
-            if(socket != null) { socket.Dispose(); }
+            if (socket != null) { socket.Dispose(); }
 
             socket = new ClientWebSocket();
             socket.Options.AddSubProtocol("actioncable-v1-json");
 
-            Task.Run(() => { startWebsocket(); sendMessage("subscribe"); });
+
+            _ = startWebsocket();
+
+            if(await socketStatus()) {
+                _ = sendMessage("subscribe", new string[] { "", "", "", "" });
+            } else {
+                Print("[Websocket]: Timeout sending Subscribe message to socket.", 3);
+                _ = Close();
+            }
+        }
+
+
+        /// <summary>
+        ///  Returns the status of the socket
+        /// </summary>
+        /// <returns>Bool - True if available for usage, otherwise False</returns>
+        private async Task<bool> socketStatus() {
+            long socketWait = GetUnixTimestamp();
+
+            while(true) {
+                if (socket != null)
+                {
+                    if (socket.State == WebSocketState.Open)
+                        return true;
+                    
+                    if (GetUnixTimestamp() - socketWait > 7)
+                        return false;
+                } else
+                    if (GetUnixTimestamp() - socketWait > 7)
+                    return false;
+
+                await Task.Delay(100);
+            }
         }
 
         /// <summary>
         ///  Prevent mass flood of Connect attempts by slowing down the flow each error.
         /// </summary>
         /// <returns></returns>
-        private async Task Reconnect() {
+        private async Task Reconnect()
+        {
             if (!_faulted) return;
 
             Print($"[Websocket]: Socket faulted. Attempting to re-establish connection with {WSS_HOST}. n({_reconnections})", 1);
 
             if (GetUnixTimestamp() - _TTLR > 300) { _TTLR = GetUnixTimestamp(); _reconnections = 0; } //reset "Time To Last Reconnect" and attempts after 5 minutes
 
-            Task.Delay((1000 * _reconnections)).Wait(); //instant, 1, 2, 3, 4 ,5 seconds
-            if(_reconnections < 5) _reconnections++;
+            await Task.Delay((1000 * _reconnections)); //instant, 1, 2, 3, 4 ,5 seconds
+            if (_reconnections < 30) _reconnections++;
 
-            Connect();
+            _ = Connect();
         }
 
         /// <summary>
         ///  Gracefully closes the Websocket Client
         /// </summary>
-        public async Task Close(int code = 0) {
-            if(!_connected) { Print($"[Websocket]: Socket is not open (Nothing Happens)", 2); return; }
+        public async Task Close(int code = 0)
+        {
+            if (!_connected) { Print($"[Websocket]: Socket is not open (Nothing Happens)", 2); return; }
 
             cts.Cancel();
 
             int _timeout = 100;
 
-            while(socket != null || socket.State != WebSocketState.Closed) {
+            while (socket != null || socket.State != WebSocketState.Closed)
+            {
                 if (_timeout <= 0) { Print($"[Websocket]: The socket did not close within the expected time (Timeout)", 3); break; }
                 await Task.Delay(100);
                 _timeout--;
@@ -253,110 +297,130 @@ namespace ShimamuraBot
         }
         #endregion
 
-        #region OutboundRootMessage
-        /*public class OutboundMessageRoot
-        {
-            public string Command { get; set; }
-            public string Identifier => JsonSerializer.Serialize(new IdentifierObject { Channel = "GatewayChannel" });
-
-            [JsonIgnore]
-            public OutboundData DataObject { get; set; }
-
-            public string Data => JsonSerializer.Serialize(DataObject);
-        }*/
-        public class OutboundMessageRoot {
-            public string command { get; set; }
-
-            [JsonIgnore]
-            public IdentifierObject IdentifierObject { get; set; }
-
-            public string identifier => JsonSerializer.Serialize(IdentifierObject);//, new JsonSerializerOptions { WriteIndented = true });
-
-            [JsonIgnore]
-            public OutboundData DataObject { get; set; }
-
-            public string data => JsonSerializer.Serialize(DataObject);//, new JsonSerializerOptions { WriteIndented = true });
-        }
-
-        public class IdentifierObject
-        {
-            public string channel { get; set; }
-        }
-
-        public class OutboundData {
-            public string action { get; set; }
-            public string text { get; set; }
-            public string channelId { get; set; }
-        }
         #endregion
 
-        #endregion
 
-        public string testMessage(string data)
-        {
-            var outboundmessage = new OutboundMessageRoot
+        /// <summary>
+        ///  Constrcuts the string to send to the socket.
+        /// </summary>
+        /// <param name="action">The action. (Alternatively for subscription 'subscribe')</param>
+        /// <param name="dparam">0:text, 1:username, 2:messageId</param>
+        /// <returns></returns>
+        /// <exception cref="NotImplementedException"></exception>
+        /// <exception cref="Exception"></exception>
+        private string MessageConstructor(string action, params string[] dparam) {
+            //TODO: Finish message constructor for all sendmessage datatypes (subscribe/send_message/etc...)
+
+            //leaving this for reference, I was made aware that using anonymous types at compile time create classes automagically.
+            /*var test = new JsonObject
             {
-                command = "message",
-                IdentifierObject = new IdentifierObject { channel = "GatewayChannel" },
+                ["command"] = "message",
+                ["identifier"] = "{\"channel\":\"GatewayChannel\"}",//JsonSerializer.Serialize(GATEWAY_IDENTIFIER),
+                ["data"] = JsonSerializer.Serialize(new JsonObject { ["action"] = "send_message", ["text"] = action, ["channelId"] = "470a4687924f9561b55f990c6e624800c7108109e84fc88e0598d641e36b7e9f" })
+            };*/ 
 
-                DataObject = new OutboundData
-                {
-                    action = "send_message",
-                    text = data,
-                    channelId = "470a4687924f9561b55f990c6e624800c7108109e84fc88e0598d641e36b7e9f"
-                }
-            };
+            switch(action)
+            {
+                case "subscribe":
+                    return JsonSerializer.Serialize(new
+                    {
+                        command = action,
+                        identifier = JsonSerializer.Serialize(GATEWAY_IDENTIFIER)
+                    });
 
-            //var a = JsonSerializer.Serialize<OutboundMessageRoot>(outboundmessage);
-            var a = JsonSerializer.Serialize(outboundmessage);//, new JsonSerializerOptions { WriteIndented = true });
+                case "send_message":
+                    return JsonSerializer.Serialize(new
+                    {
+                        command = "message",
+                        identifier = GATEWAY_IDENTIFIER,
+                        data = new
+                        {
+                            action,
+                            text = dparam[0],
+                            channelId
+                        }
+                    });
 
-            sendMessage("", a);
-            return a;
+                case "send_whisper":
+                    throw new NotImplementedException();
+                case "delete_message":
+                    throw new NotImplementedException();
+                case "mute_user":
+                    throw new NotImplementedException();
+                case "unmute_user":
+                    throw new NotImplementedException();
+                case "block_user":
+                    throw new NotImplementedException();
+                default:
+                    throw new Exception($"Invalid data type fall-thru. Data: {action}");
+            }
         }
 
-        private void onMessage(string data) {
-            //ignore pings - maybe check if pings stop could be a socket issue.
-            if(data.StartsWith("{\"type\":\"ping\""))  return;
 
-            if(data.Contains("confirm_subscription")) {
+        private async Task<bool> onMessage_StreamEvent(string payload)
+        {
+            var streamEvent = JsonSerializer.Deserialize<RootStreamEvents>(payload);
+            Print($"[StreamEvent]: idk shit happened :: {streamEvent.message.text}", 1);
+            if (streamEvent.message.metadataObject.tipMenuItem == "Remove Bra") vCat.Redeem("tta");
+            if (!string.IsNullOrEmpty(streamEvent.message.metadataObject.tipMenuItem)) Print($"[StreamEvent]: !! tipMenuItem :: {streamEvent.message.metadataObject.tipMenuItem}", 2);
+
+            //write the code for events on tip
+            _ = WriteToFileShrug("StreamEvent", new string[] { streamEvent.message.createdAt.ToString(), streamEvent.message.text, $"who: {streamEvent.message.metadataObject.who} ::", $"what: {streamEvent.message.metadataObject.what} :: tipmenitem: {streamEvent.message.metadataObject.tipMenuItem} :: prize: {streamEvent.message.metadataObject.prize} :: howMuch: {streamEvent.message.metadataObject.howMuch}" });
+            return true;
+        }
+
+        private async Task onMessage_Message_message_message(string payload)
+        {
+            var msg = JsonSerializer.Deserialize<RootMessageEvent>(payload);
+            if (msg.message.visibility != "public") return;
+            //hardcoded compensation until modules is finished // I believe a redeem did not successfully go through and I'm hardcoding a free redeem.
+            if (msg.message.text.Contains(".redeem") && msg.message.author.username == "murphymichael902") vCat.Redeem("tta");
+
+            Print($"[Chat]: {msg.message.author.username}: {msg.message.text}", 1);
+            Console.Beep();
+            _ = WriteToFileShrug("ChatMessage", new string[] { msg.message.createdAt.ToString(), $"{ msg.message.author.username}: {msg.message.text}" });
+            if (msg.message.text.StartsWith(".duck")) vCat.Redeem("duck");
+            else if (msg.message.text.StartsWith(".yeet")) vCat.Redeem("yeet");
+            else if (msg.message.text.StartsWith(".testing")) vCat.Redeem("tta");
+        }
+
+        private async Task onMessage_PresenceEvent(string payload)
+        {
+            var presencemsg = JsonSerializer.Deserialize<RootPresenceEvent>(payload);
+            var eveType = presencemsg.message.type == "enter_stream" ? "Entered the chat" : "Left the chat";
+            _ = WriteToFileShrug("UserPresence", new string[] { presencemsg.message.createdAt.ToString(), $"{presencemsg.message.text} {eveType}" });
+        }
+
+
+        private async Task onMessage(string data)
+        {
+            if (data.StartsWith("{\"type\":\"ping\"")) return;
+
+            if (data.Contains("confirm_subscription")) {
                 Print($"[Shimamura]: Connected to chat!", 1);
                 return;
-            } else if(data.Contains("reject_subscription")) {
-                Print($"[Shimamura]: Could not connect to chat. Make sure everything is correctly configured.", 1);
+            } else if (data.Contains("reject_subscription")) {
+                Print($"[Shimamura]: Could not connect to chat. Make sure everything is correctly configured.", 2);
                 return;
             }
 
             if (!data.Contains("\"message\":")) return;
 
+            //ChatGPT's optimization is to put this at the top of the method because "it will reduce json parsing calls". I can't tell if it's 99% special or just doesn't understand my code
             JsonNode jsonNode = JsonNode.Parse(data);
 
             string eventType = (string)jsonNode["message"]!["event"]!;
 
-            switch (eventType)  {
-                case "StreamEvent": //deserialize Root StreamEvent class
-                    var streamEvent = JsonSerializer.Deserialize<RootStreamEvents>(data);
-                    Print($"[StreamEvent]: idk shit happened :: {streamEvent.message.text}", 1);
-                    if(streamEvent.message.metadataObject.tipMenuItem == "Remove Bra") {
-                        vCat.Redeem("tta");
-                    }
-
-                    //write the code for events on tip
-                    WriteToFileShrug(eventType, new string[] { streamEvent.message.createdAt.ToString(), streamEvent.message.text, $"who: {streamEvent.message.metadataObject.who}::", $"what: {streamEvent.message.metadataObject.what}" });
+            switch (eventType)
+            {
+                case "StreamEvent":
+                    _ = onMessage_StreamEvent(data);
                     break;
                 case "ChatMessage": //deserialize Root ChatMessage class
-                    var msg = JsonSerializer.Deserialize<RootMessageEvent>(data);
-                    if (msg.message.visibility != "public") return;
-
-                    Print($"[Chat]: {msg.message.author.username}: {msg.message.text}", 1);
-                    WriteToFileShrug(eventType, new string[] { msg.message.createdAt.ToString(), $"{msg.message.author.username}: {msg.message.text}" });
-                    if (msg.message.text.StartsWith(".duck")) vCat.Redeem("duck");
-                    else if (msg.message.text.StartsWith(".yeet")) vCat.Redeem("yeet");
-                    else if (msg.message.text.StartsWith(".testing")) vCat.Redeem("tta");
+                    _ = onMessage_Message_message_message(data);
                     break;
                 case "UserPresence": //deserialize Root UserPresence class
-                    var presencemsg = JsonSerializer.Deserialize<RootPresenceEvent>(data);
-                    var eveType = presencemsg.message.type == "enter_stream" ? "Entered the chat" : "Left the chat";
-                    WriteToFileShrug(eventType, new string[] { presencemsg.message.createdAt.ToString(), $"{presencemsg.message.text} {eveType}" });
+                    _ = onMessage_PresenceEvent(data);
                     //Print($"[Presence]: {presencemsg.message.text} {eveType}!", 1);
                     break;
                 default: //This shouldn't trigger but if it does capture it so I can inspect what went wrong
@@ -365,12 +429,14 @@ namespace ShimamuraBot
             }
         }
 
-        private void FidgetyStuff(string msg) {
-            switch (msg.ToLower()) {
+        private void FidgetyStuff(string msg)
+        {
+            switch (msg.ToLower())
+            {
                 case "ping":
                     break;
                 case "test":
-                    sendMessage("APPLES");
+                    _ = sendMessage("APPLES");
                     break;
                 case "yeet":
                     //vCat msg
@@ -383,59 +449,41 @@ namespace ShimamuraBot
             }
         }
 
-        private string stringifyJSON(string data, object obj2 = null, object obj3 = null)
+
+        /// <summary>
+        ///  Send a message to the Websocket
+        /// </summary>
+        /// <param name="action">The action. (Alternatively for subscription 'subscribe')</param>
+        /// <param name="dparams">0:text, 1:username, 2:messageId</param>
+        /// <returns>Bool - True if sent, False with error</returns>
+        public async Task<bool> sendMessage(string action, params string[] dparams)
         {
-            var json = JsonSerializer.Serialize(obj2);
-            var gateway = JsonSerializer.Serialize(GATEWAY_IDENTIFIER);
+            bool _success = false;
 
-            Print($"{gateway}", 0);
-
-            using(JsonDocument doc = JsonDocument.Parse(gateway))
-            {
-                var root = doc.RootElement;
-
-                var ttem = new
-                {
-                    command = data, //"command":"data" //\\u2
-                    identifier = root
-                };
-
-                var resp = JsonSerializer.Serialize(ttem);
-
-                Print($"{resp}", 0);
-                Environment.Exit(0);
-                return resp;
+            //https://www.codetinkerer.com/2018/06/05/aspnet-core-websockets.html
+            //Attempting to invoke any other operations in parallel may corrupt the instance.
+            //Attempting to invoke a send operation while another is in progress or a receive operation while another is in progress will result in an exception.
+            await messageSemaphore.WaitAsync();
+            try {
+                if (await socketStatus()) {
+                    var msgsfs = MessageConstructor(action, dparams);
+                    Print($"[JSON]: {msgsfs}", 0);
+                    await socket.SendAsync(Encoding.UTF8.GetBytes(msgsfs), WebSocketMessageType.Text, true, ctx); //byte[] can be implicitly converted to ArraySegment<byte> without explicitly wrapping new ArraySegment<byte>, not really documented
+                    _success = true;
+                } else
+                    throw new Exception("Socket timeout while waiting to send message");
+            } catch (WebSocketException wse) {
+                Print($"[Websocket]: Could not send message: {action} :: channelId: {dparams[0]} :: text: {dparams[1]} :: username: {dparams[2]} :: messageId: {dparams[3]}", 3);
+                Print($"[Websocket]: The exception was :: {wse}", 0);
+            } catch (Exception ex) {
+                Print($"[Websocket]: {ex}", 3);
+            } finally {
+                messageSemaphore.Release();
+                //if (socket.State != WebSocketState.Open)
+                    //Print($"[Websocket]: The socket was closed because of the message. Closing status: {(int)socket.CloseStatus}", 2);
             }
-            return null;
-        }
 
-
-        private async Task sendMessage(string data, string debugdata = "") {
-
-            ///{ "command": "subscribe",
-            ///"identifier": "{\"channel\":\"GatewayChannel\",\"streamer\":\"joystickuser\"}" }
-            //user_id backup
-            string fuckoff;
-            if (string.IsNullOrEmpty(debugdata))
-            {
-                var c = "{\\\"channel\\\":\\\"GatewayChannel\\\",\\\"streamer\\\":\\\"adachi91\\\"}";
-
-                fuckoff = "{\"command\":\"" + data + "\",\"identifier\":\"" + c + "\"}";
-            } else {
-                fuckoff = debugdata;    
-            }
-            Print($"[JSON]: You are preparing to send this shit: \n\n{fuckoff}\n\n", 0);
-
-
-            ///var json = JsonSerializer.Serialize(obi);
-            //Print($"[WSSClient]: Sending \n\n{json}\n\n", 0);
-            var buffer = new ArraySegment<byte>(Encoding.UTF8.GetBytes(fuckoff));
-
-            int timeout = 50;
-            while (socket.State != WebSocketState.Open) { Thread.Sleep(100); timeout--; if (timeout <= 0) { return; } } //timeout reached no socket open. returning
-            
-            //if (socket.State == WebSocketState.Open)
-            socket.SendAsync(buffer, WebSocketMessageType.Text, true, ctx);
+             return _success;
         }
 
 
@@ -446,246 +494,52 @@ namespace ShimamuraBot
             try {
                 await socket.ConnectAsync(new Uri(WSS_GATEWAY), ctx);
                 _connected = true;
-                _faulted = false;
+                _faulted = true;
 
                 byte[] buffer = new byte[4096]; //1024 bytes IF the header Sec-Websocket-Maximum-Message-Size is detected, then that is the maximum size the buffer can be to prevent DDoSing.
-                Task<WebSocketReceiveResult> listenTask;
-                WebSocketReceiveResult listenResult;
+                Task<WebSocketReceiveResult> socketMsg;
+                WebSocketReceiveResult socketResult;
 
                 while (socket.State == WebSocketState.Open && !ctx.IsCancellationRequested) {
-                    listenTask = socket.ReceiveAsync(new ArraySegment<byte>(buffer), default);
-                    var complete = await Task.WhenAny(Task.Delay(Timeout.Infinite, ctx), listenTask);
+                    socketMsg = socket.ReceiveAsync(new ArraySegment<byte>(buffer), default); //default is intentional
+                    var TaskTriggered = await Task.WhenAny(Task.Delay(Timeout.Infinite, ctx), socketMsg);
 
-                    if (complete != listenTask) break;
+                    if (TaskTriggered != socketMsg) break;
 
-                    listenResult = await listenTask;
+                    socketResult = await socketMsg;
 
-                    if (listenResult.MessageType == WebSocketMessageType.Text) {
-                        string message = Encoding.UTF8.GetString(buffer, 0, listenResult.Count);
-                        onMessage(message);
+                    if (socketResult.MessageType == WebSocketMessageType.Text) {
+                        _ = onMessage(Encoding.UTF8.GetString(buffer, 0, socketResult.Count));
                         continue;
-                    } else if (listenResult.MessageType == WebSocketMessageType.Close) {
-                        Print($"[Websocket]: {WSS_HOST} closed the socket with Code: {(int)listenResult.CloseStatus}", 1);
-                        cts.Cancel();
-                        _connected = false;
+                    } else if (socketResult.MessageType == WebSocketMessageType.Close) {
+                        Print($"[Websocket]: {WSS_HOST} closed the socket with Code: {(int)socketResult.CloseStatus}", 1);
+                        if ((int)socketResult.CloseStatus == 1007 || (int)socketResult.CloseStatus == 1002) _faulted = false;
                         break;
                     } else {
-                        Print($"[Websocket]: Unhandled Exception {listenResult.MessageType.ToString()}", 3);
-                        if (socket.State == WebSocketState.Closed || socket.State == WebSocketState.Aborted) break;
+                        if (socket.State != WebSocketState.Open) break;
                     }
                 }
 
-                if (ctx.IsCancellationRequested && socket.State == WebSocketState.Open) { //normal closure by user
+                if (ctx.IsCancellationRequested && socket.State == WebSocketState.Open) { //1000
+                    _faulted = false;
                     Print($"[Websocket]: Closing socket to {WSS_HOST}...", 0);
                     await socket.CloseAsync(WebSocketCloseStatus.NormalClosure, "FaretheWell", default);
-                    _connected = false;
                     Print($"[Websocket]: Socket successfully closed", 1);
                 }
-                //anything broken;
             }
-            catch (System.Net.WebSockets.WebSocketException wse) { //General Failure
-                
-                Print($"[Websocket]: WebsocketException - General Failure (Connectivity issue) - will attempt a reconnect", 3); //a massive loop was thrown into chaos here. I do not understand how it got into a Loop {} but once it was handled in Logger it stopped. Loop{} in ClientWebsocket class? it was a `System.Net.Sockets.SocketException` that snowballed it.
-                WriteToFileShrug("Error", new string[] { DateTime.UtcNow.ToString(), $"Connection to {WSS_HOST} was Reset" }); //best terminology? technically it's partially right.
-                _faulted = true;
-                _connected = false;
-                cts.Cancel();
-                Task.Delay(369).Wait(); //trying to keep it from overloading the logger
+            catch (System.Net.WebSockets.WebSocketException) {
+                Print($"[Websocket]: WebsocketException - General Failure. Connection to {WSS_HOST} was reset", 3); //a massive loop was thrown into chaos here. I do not understand how it got into a Loop {} but once it was handled in Logger it stopped. Loop{} in ClientWebsocket class? it was a `System.Net.Sockets.SocketException` that snowballed it.
             } catch (Exception ex) { //WHO KNOWS?!
                 Print($"[Websocket]: Unhandle exception :: {ex}", 3);
-            } finally {
-                if (_faulted) Reconnect();
+            }
+            finally //no matter what happens in this world. This will always be called it doesn't have to fucking error, that's why it's finally.
+            {
+                _connected = false;
+                cts.Cancel();
+
+                await Task.Delay(369);
+                if (_faulted) _ = Reconnect();
             }
         }
-
-
-
-
-
-
-
-
-
-
-
-
-        /*public async Task parseChatChannelMessage(string _sockMessage)
-        { //come here if channel == ChatChannel, 
-            if (!_sockMessage.Contains("\"ChatChannel\""))
-                return;
-            /*
-             * [Socket]: {
-             * "identifier":"{
-             *  \"channel\":\"ChatChannel\",
-             *  \"stream_id\":\"adachi91\",
-             *  \"user_id\":\"7b33f519-b785-42ee-b2e0-5b7007149f79\"}",
-             *  "message":
-             *  {
-             *      "event":"ChatMessage",
-             *      "createdAt":"2023-05-01T18:47:01Z",
-             *      "messageId":"3ce41b14-83b1-41f1-b9ee-67415d7ae604",
-             *      "type":"new_message",
-             *      "visibility":"public",
-             *      "text":"I've become so numb, hello bot",
-             *      "botCommand":null,
-             *      "botCommandArg":null,
-             *      "emotesUsed":[],
-             *      "author":{
-             *          "slug":"adachi91",
-             *          "username":"Adachi91",
-             *          "usernameColor":null,
-             *          "displayNameWithFlair":"{{{streamerBadge}}} Adachi91",
-             *          "signedPhotoUrl":"https://images.joystick.tv/content/videos/joystick/production/6fe7/58b0/1937/7d7d/f77d/6fe758b019377d7df77de64802df5ca6/6fe758b019377d7df77de64802df5ca6.png?validfrom=1682966521&validto=1685559421&&hash=nRCHzwhWtcdxTR022L%2FNAet%2BbtA%3D",
-             *          "signedPhotoThumbUrl":"https://images.joystick.tv/content/videos/joystick/production/6fe7/58b0/1937/7d7d/f77d/6fe758b019377d7df77de64802df5ca6/6fe758b019377d7df77de64802df5ca6-250x250.png?validfrom=1682966521&validto=1685559421&&hash=BONQeYylVm0DjzgHOFk4QseqO2M%3D"
-             *      },
-             *      "streamer":{
-             *          "slug":"adachi91",
-             *          "username":"Adachi91",
-             *          "usernameColor":null,
-             *          "signedPhotoUrl":"https://images.joystick.tv/content/videos/joystick/production/6fe7/58b0/1937/7d7d/f77d/6fe758b019377d7df77de64802df5ca6/6fe758b019377d7df77de64802df5ca6.png?validfrom=1682966521&validto=1685559421&&hash=nRCHzwhWtcdxTR022L%2FNAet%2BbtA%3D",
-             *          "signedPhotoThumbUrl":"https://images.joystick.tv/content/videos/joystick/production/6fe7/58b0/1937/7d7d/f77d/6fe758b019377d7df77de64802df5ca6/6fe758b019377d7df77de64802df5ca6-250x250.png?validfrom=1682966521&validto=1685559421&&hash=BONQeYylVm0DjzgHOFk4QseqO2M%3D"
-             *     },
-             *     "chatChannel":"adachi91",
-             *     "mention":false,
-             *     "mentionedUsername":null
-             * }
-             *}
-[Socket]: 
-[Socket]: {"identifier":"{\"channel\":\"EventLogChannel\",\"stream_id\":\"adachi91\"}","message":{"event":"StreamEvent","id":"3af57a80-bfa3-4fe8-98cd-c8e8ae496a3f","type":"ChatMessageReceived","text":"new_message","metadata":"{}","createdAt":"2023-05-01T18:47:01Z","updatedAt":"2023-05-01T18:47:01Z"}}
-             */
-
-        /*    dynamic jsonMsg = JsonSerializer.Deserialize<dynamic>(_sockMessage);
-
-            //emotes used??
-            Console.WriteLine("[{0}] {1}: {2}", jsonMsg.message.createdAt, jsonMsg.message.author.username, jsonMsg.message.text);
-            //[00:00:00] Adachi: Hello --Basic
-            //[Adachi91][00:00:00] John: Hello --Channel
-            //displayNameWithFlair {{{streamerBadge}}} ? stream_id == author.username - Is the stream Owner
-        }
-
-
-        private bool SubscriptionSuccess(string resp) {
-            bool result = false;
-            bool somethingwentwrong = false;
-            //yada yada code stuff that checks if it was rejected or successful
-
-            if (somethingwentwrong)
-                throw new Exception($"I couldn't understand if the Subscription was successful or not.\r\n{resp}\r\n");
-
-            return result;
-        }
-
-        /// <summary>
-        /// Keys track of what channels the bot is subscribed to so it can ubsccruibe easier I think I just had   a stroke writing that.
-        /// </summary>
-        /// <param name="channel">Channel name</param>
-        public void AcknowledgeSubscription(string channel, bool fuckitsjustaname = false)
-        { //I want to keep this here so I can parse incoming sucessfull subscriptions and then command the list from here, instead of a fire and forget in events
-
-            //C# 10 introduced new rules for accessing static members. Previously, it was allowed to access a static member using an instance reference, but now it's not allowed anymore.
-            if (_events.Subscriptions.ContainsKey(channel))
-                _events.Subscriptions[channel] = !_events.Subscriptions[channel];
-            else
-                _events.Subscriptions.Add(channel, fuckitsjustaname);
-        }
-
-        private void MainParser(string resp)
-        { //Break down resp and send them to the correct subparser or build a gigantic pile of shit here.
-
-            if(resp.Contains(""))
-            {
-                //sub ack
-            } else if(resp.Contains(""))
-            {
-                //unsub ack
-            }
-        }
-
-        /// <summary>
-        /// Subscribe to a channel
-        /// </summary>
-        /// <param name="_event">Command</param>
-        /// <param name="debug">Temp for testing bypassing all code</param>
-        /// <param name="cancellationToken"></param>
-        /// <returns></returns>
-        public async Task Subscribe(string _event, bool debug = false, CancellationToken cancellationToken = default) //TODO YOU HAVE TO HADD AN EXTRA ARG besides Command you need to know WHO to subscribe to, jackass.
-        {
-            if (!_connected)
-                throw new InvalidOperationException("Not connected to WebSocket endpoint.");
-
-            //not sure how many events there are ehhhhhhhhh I think I got most of them ? probably not.
-
-            if (debug)
-            {
-                string[] testy = {
-                    "{\"command\":\"subscribe\",\"identifier\":\"{\\\"channel\\\":\\\"ApplicationChannel\\\"}\"}",
-                    "{\"command\":\"subscribe\",\"identifier\":\"{\\\"channel\\\":\\\"SystemEventChannel\\\",\\\"user_id\\\":\\\"" + "TODELETE" + "\\\"}\"}",
-                    "{\"command\":\"subscribe\",\"identifier\":\"{\\\"channel\\\":\\\"EventLogChannel\\\",\\\"stream_id\\\":\\\"adachi91\\\"}\"}",
-                    "{\"command\":\"subscribe\",\"identifier\":\"{\\\"channel\\\":\\\"ChatChannel\\\",\\\"stream_id\\\":\\\"adachi91\\\",\\\"user_id\\\":\\\"" + "TODELETE" + "\\\"}\"}",
-                    "{\"command\":\"subscribe\",\"identifier\":\"{\\\"channel\\\":\\\"WhisperChatChannel\\\",\\\"user_id\\\":\\\"" + "TODELTE" + "\\\",\\\"stream_id\\\":\\\"adachi91\\\"}\"}",
-                };
-
-                ArraySegment<byte> buffer;
-
-                for(int i = 0; i<=4; i++)
-                {
-                    //Console.WriteLine("-------------");
-                    Console.WriteLine(">> {0}", testy[i]);
-                    //Console.WriteLine("-------------");
-                    buffer = new ArraySegment<byte>(Encoding.UTF8.GetBytes(testy[i]));
-                    try {
-                        await WSSClient.SendAsync(buffer, WebSocketMessageType.Text, true, CancellationToken.None);
-                    } catch (Exception ex) { Console.WriteLine(ex); }
-                    //Thread.Sleep(150);
-                }
-                return;
-            }
-
-            List<Object> msg = _events.MessageConstructor(_event);
-
-            var options = new JsonSerializerOptions { Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping };
-
-            foreach (var messy in msg)
-            {
-                var json = JsonSerializer.Serialize(messy, options);
-
-                var buffer = new ArraySegment<byte>(Encoding.UTF8.GetBytes(json));
-                try {
-                    await WSSClient.SendAsync(buffer, WebSocketMessageType.Text, true, cancellationToken);
-                } catch (Exception ex) {
-                    Console.WriteLine($"Shit exploded in the Subscribe Method - {ex}");
-                }
-            }
-        }
-
-        /// <summary>
-        /// Send Unsubscribe messages if leaving a channel, or disconnecting.
-        /// </summary>
-        /// <param name="_event">Event to send to the constructor for JSONifying</param>
-        /// <param name="debug">ASDFADSFADSFASDFASDF DELETE ME</param>
-        /// <param name="cancellationToken">Pizza</param>
-        /// <returns>nothing</returns>
-        public async Task Unsubscribe(string _event, bool debug = false, CancellationToken cancellationToken = default)
-        {
-            var options = new JsonSerializerOptions { Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping };
-
-            List<Object> msg = _events.MessageConstructor(_event);
-
-            foreach (var THEGODDAMNMESSAGETOSENDONEATATIMEORSOMETHINGIDONTFUCKINGKNOWOK in msg)
-            {
-                var json = JsonSerializer.Serialize(THEGODDAMNMESSAGETOSENDONEATATIMEORSOMETHINGIDONTFUCKINGKNOWOK, options);
-                
-                var buffer = new ArraySegment<byte>(Encoding.UTF8.GetBytes(json));
-
-                try {
-                    await WSSClient.SendAsync(buffer, WebSocketMessageType.Text, true, CancellationToken.None);
-                } catch (Exception ex) {
-                    Console.WriteLine($"Shit exploded in the Unsubscribe method, idk kill it or something :: {ex}");
-                }
-            }
-            Console.WriteLine("Jobs done, zug zug");
-        }*/
-
-        
     }
 }

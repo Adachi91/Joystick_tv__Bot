@@ -92,15 +92,15 @@ namespace ShimamuraBot
         /// Send a POST request to the host's gateway to request a JWT using HTTPClient
         /// </summary>
         /// <param name="type">Type of grant. 1:authorization_code, 2:refresh_token</param>
-        public async void callmewhateverlater(int type) {
+        public async Task<bool> callmewhateverlater(int type) {
             //first let's do a few checks
 
-            if (checkJWT()) { Print($"[OAuth]: Already have a valid JWT. Not requesting a new one...", 2); return; }
+            if (checkJWT()) { Print($"[OAuth]: Already have a valid JWT. Not requesting a new one...", 2); return false; }
 
             string grantType = "";
             if (type == 1) grantType = "authorization_code";
             else if (type == 2) grantType = "refresh_token";
-            else { Print($"[OAuth]: Invalid grant_type provided. The type must be 1:authorization or 2:refresh", 3); return; }
+            else { Print($"[OAuth]: Invalid grant_type provided. The type must be 1:authorization or 2:refresh", 3); return false; }
 
             using (HttpClient hc = new HttpClient()) {
                 hc.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Basic", ACCESS_TOKEN);
@@ -122,8 +122,11 @@ namespace ShimamuraBot
                                 Print($"[HTTPClient]: There was a mismatch in the return state from {HOST}", 3);
 
                     UpdateValues(respData);
-                } else
+                    return true;
+                } else {
                     Print($"[HTTPClient]: Failed to retrieve JWT from {HOST} with HTTP status of {resp.StatusCode}", 3);
+                    return false;
+                }
             }
         }
 

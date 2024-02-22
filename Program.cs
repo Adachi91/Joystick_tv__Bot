@@ -11,6 +11,7 @@ using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using System.Runtime.CompilerServices;
 using System.Reflection.Metadata;
+using System.Timers;
 
 namespace ShimamuraBot
 {
@@ -33,8 +34,22 @@ namespace ShimamuraBot
         public static string ENVIRONMENT_PATH;
 
         public const string HISTORY_PATH = @"shimamura.log";
-        public static bool LOGGING_ENABLED;
-        
+        public static bool LOGGING_ENABLED = false;
+
+        public static System.Timers.Timer TimingBelt = new System.Timers.Timer(1000); /*TimingBelt = new Timer((cb) => { 
+            
+        }, new { a = "" }, Timeout.Infinite, 500);*/
+
+        private static async void TimerTimy(object sender, ElapsedEventArgs e) {
+            //CheckJWT
+            //Do any other checks
+            //check Ping timer?
+            //stuff like that.
+            await Task.Run(() => {
+                /*for(int i =0; i<100; i++)
+                Console.WriteLine("fuck");*/
+            });
+        }
 
         #region MainLoopMultiThreading_TODO
         //private static readonly ManualResetEvent ExitEvent = new ManualResetEvent(false);
@@ -107,11 +122,12 @@ namespace ShimamuraBot
         private static OAuthClient oAuth;
         private static HTTPServer tempWebserver;
         private static VNyan vCat = new VNyan();
-        public static MainThread MainLoop = new MainThread();
-        static void Main(string[] args)
+        private static MainThread MainLoop = new MainThread();
+        async static Task Main(string[] args)
         {
             AppDomain.CurrentDomain.ProcessExit += CurrentDomainOnProcessExit;
             Console.CancelKeyPress += ConsoleOnCancelKeyPress;
+
 
 
             if (File.Exists(".env")) ENVIRONMENT_PATH = ".env";
@@ -146,6 +162,9 @@ namespace ShimamuraBot
             tempWebserver = new HTTPServer(oAuth);
             WebsocketClient wss = new WebsocketClient();
 
+            TimingBelt.Enabled = true;
+            TimingBelt.Elapsed += TimerTimy;
+
             if (!MainLoop.Running()) MainLoop.Run();
             Console.Clear();
             #region Welcome ASCII garbage
@@ -174,8 +193,8 @@ namespace ShimamuraBot
             ///Print($"[.env]: Gateway: {GATEWAY_IDENTIFIER}", 0);
             ///Print($"[.env]: Refresh: {APP_JWT_REFRESH}", 0);
             Print($"[environment]: Successfully loaded environment file.", 1);
-            var x = true;
-            while (x) {
+
+            while (true) {
                 string input = Console.ReadLine();
                 var msg = "";
                 if(input.StartsWith("test")) {
@@ -184,34 +203,45 @@ namespace ShimamuraBot
                     msg = tmp[1];
                 }
 
-                switch (input.ToLower())
-                {
+                switch (input.ToLower()) {
                     case "":
                         Print("", 0);
                         break;
                     case "test":
-                        var t = wss.testMessage(msg);
-                        //t.Replace("\\u0022", "f");
-                        Print($"[ShimamuraJSON]: {t}", 0);
+                        /*
+                         * 
+                         * TEST ing areai
+                         * 
+                         * 
+                         */
+                        ///if(msg.Contains("sample")) { var c = wss.testMessage("", true); continue; }
+
+                        //var t = wss.testMessage(msg);
+                        _ = wss.sendMessage("send_message", new string[] { "", msg, "", "" });
+                        //t.Replace("\\\\\u0022", "f");
+                        //Print($"[ShimamuraJSON]: {t}", 0);
+                        break;
+                    case "lilpeep":
+                        ///_ = wss.testMessage("fuck");
                         break;
                     case "exit" or "quit":
-                        x = false;//MainLoop.Stop();
+                        return;//MainLoop.Stop();
                         break;
                     case "start" or "run": //TOSTAY
-                        if(OAuthClient.checkJWT()) {
-                            wss.Connect();
-                            //Task.Run(() => wss.Listen(wss.ctx));
-
-                            //wss.sendMessage("subscribe");
-                        } else
-                            tempWebserver.Start();
+                        if (OAuthClient.checkJWT())
+                            _ = wss.Connect();
+                        else {
+                            var _oauthComplete = await tempWebserver.Start();
+                            if (_oauthComplete)
+                                _ = wss.Connect();
+                        }
                         break;
                     case "stop":
                         Print($"[Shimamura]: Stopping bot", 1);
-                            wss.Close(-1);
+                            _ = wss.Close(-1);
                         break;
                     case "listen"://PRUNE AFTER FLOW HAS BEEN COMPLETE.
-                        tempWebserver.Start();
+                        _ = tempWebserver.Start();
                         break;
                     case "stoplisten"://PRUNE  AFTER FLOW HAS BEEN COMPLETE.
                         tempWebserver.Stop();
@@ -221,6 +251,16 @@ namespace ShimamuraBot
                             Print($"[Info]: Token expires in {APP_JWT_EXPIRY - GetUnixTimestamp()} seconds", 1);
                         else
                             Print($"[Info]: You do not have a token yet, or it is expired.", 1);
+                        break;
+                    case "resetenv":
+                        Print($"[Shimamura]: WARNING This will reset all values in your .env file. Are you sure you wish to proceed? Y/N", 2);
+                        while(true) {
+                            var _confirm = Console.ReadLine().ToLower();
+
+                            if (_confirm == "y" || _confirm == "yes") { write(true); Print($"[Shimamura]: .env has been reset to defaults.", 1); break; }
+                            else if (_confirm == "n" || _confirm == "no") { Print($"[Shimamura]: Cancelled reset.", 1); break; }
+                            else break;
+                        }
                         break;
                     case "logging":
                         LOGGING_ENABLED = !LOGGING_ENABLED;
@@ -233,7 +273,8 @@ namespace ShimamuraBot
                         Print($"exp - Shows how many seconds are left until your token expires", 1);
                         Print($"logging - Toggle logging on/off", 1);
                         Print($"listen - Starts the HTTPServer (deprecate)", 1);
-                        Print($"stoplisten - Stops the HTTPServer (use this if the temporary Webserver doesn't shutdown for some reason)", 1);   
+                        Print($"stoplisten - Stops the HTTPServer (use this if the temporary Webserver doesn't shutdown for some reason)", 1);
+                        Print($"resetenv - Resets the .env file to all default values (you will have to fill them all out again!)", 1);
                         Print($"exit or quit - Exits the program gracefully", 1);
                         break;
                     default:
@@ -241,20 +282,12 @@ namespace ShimamuraBot
                         break;
                 }
             }
-                
-                //I was euuuuuuhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh (-drake) testing out a switch feature I didn't know existed.
-                /*var resultText = txt switch
-                {
-                    "20" or "22" => "I'm literally regarded.",
-                    "exit" => "ZERO ZERO TWO BEST GIRL",
-                    _ => "Shit"
-                };*/
         }
 
         private static async Task<bool> WaitForClosures()
         {//to even start I need to have a pool of resources to check list down to make sure are closed and disposed or at least gracefully closed.
-
-            return true;
+            throw new NotImplementedException();
+            //return true;
         }
 
 
@@ -267,11 +300,6 @@ namespace ShimamuraBot
         {
 
         }
-
-        /*
-         * Token management needs to happen before closure
-         * Also eh, idk draw an owl
-         */
 
         private static async void CurrentDomainOnProcessExit(object sender, EventArgs eventArgs)
         {

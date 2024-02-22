@@ -59,7 +59,7 @@ namespace ShimamuraBot
             ConsoleColor debug = ConsoleColor.Cyan;
             ConsoleColor warn = ConsoleColor.Yellow;
             ConsoleColor error = ConsoleColor.Red;
-            Console.SetCursorPosition(0, Console.CursorTop);
+            Console.SetCursorPosition(0, Console.CursorTop); //I think I need to watch this. it might be overwriting user input;
             string[] ctx = formatPrint(text); //index 0 is Tag from which class / service. index 1 is the message.
 
             switch (level) {
@@ -72,7 +72,7 @@ namespace ShimamuraBot
                     break;
                 case 2: Console.ForegroundColor = warn; Console.Write($" [WARN]{ctx[0]}:"); Console.ForegroundColor = current; Console.Write($" {ctx[1]}{Environment.NewLine}");
                     break;
-                case 3: /*Console.Write($" \x1B[38;5;9m[ERROR]{ctx[0]}: {ctx[1]}\x1B[38;5;15m{Environment.NewLine}"); test to switch to ANSI escape, good idea? great? or horrible.. */ Console.ForegroundColor = error; Console.Write($" [ERROR]{ctx[0]}:"); Console.ForegroundColor = current; Console.Write($" {ctx[1]}{Environment.NewLine}"); WriteToFileShrug("ERROR", new string[] { DateTime.UtcNow.ToString(), $"{ctx[0]}: {ctx[1]}" });
+                case 3: /*Console.Write($" \x1B[38;5;9m[ERROR]{ctx[0]}: {ctx[1]}\x1B[38;5;15m{Environment.NewLine}"); test to switch to ANSI escape, good idea? great? or horrible.. */ Console.ForegroundColor = error; Console.Write($" [ERROR]{ctx[0]}:"); Console.ForegroundColor = current; Console.Write($" {ctx[1]}{Environment.NewLine}"); _ = WriteToFileShrug("ERROR", new string[] { DateTime.UtcNow.ToString(), $"{ctx[0]}: {ctx[1]}" });
                     break;
                 case 4:
                     Random rand = new Random();

@@ -34,10 +34,13 @@ Now when you have all the entries in your `.env` filled out with your bot applic
 - `start` (start the bot)
 - `stop` (stop the bot)
 
-<p>if you run into any problems please submit an [issue here](#issues)</p>
+<p>if you run into any problems please submit an [issue here](../../issues)</p>
 
 ## Compile
-<p>TODO</p><br /><br />
+<p>TODO</p>  
+May Zeus help you if you try and read my code style / improper usage.  
+Crackhead Coding:tm: Engineer (sounds fancy) since 2002  
+<br /><br />
 
 
 
