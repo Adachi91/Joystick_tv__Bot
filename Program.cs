@@ -122,7 +122,6 @@ namespace ShimamuraBot
         #endregion
 
         private static OAuthClient oAuth;
-        private static HTTPServer tempWebserver;
         private static VNyan vCat = new VNyan();
         private static MainThread MainLoop = new MainThread();
 
@@ -192,9 +191,9 @@ namespace ShimamuraBot
                 }
             }
 
-            try { //I really over do stuff. like is this made for a 3 year old to run?
+            try {
                 envManager.load();
-            } catch (Exception ex) {
+            } catch (Exception ex) { //TODO: Fix the error it will most likely return is BotException which will be recursive.
                 Print($"[Environment]: {ex}", 3);
             }
 
@@ -208,7 +207,6 @@ namespace ShimamuraBot
                 "bot"
             );
 
-            tempWebserver = new HTTPServer(oAuth);
             WebsocketClient wss = new WebsocketClient();
 
             TimingBelt.Enabled = true;
@@ -260,14 +258,14 @@ namespace ShimamuraBot
                     input = tits[0];
                     msg = tits[1];
                 }
-                else if (input.ToLower().StartsWith("lilpeep"))
+                else if (input.ToLower().StartsWith("whisper"))
                 {
                     tits = input.Split(" ", 3, StringSplitOptions.RemoveEmptyEntries);
                     input = tits[0];
                     user = tits[1];
                     msg = tits[2];
                 }
-                else
+                /*else
                 {
                     tits = input.Split(" ", StringSplitOptions.RemoveEmptyEntries);
                     input = tits[0];
@@ -282,20 +280,18 @@ namespace ShimamuraBot
                             tmptits[i - 1] = tits[i];
                     }
                     tits = tmptits;
-                }
+                }*/
 
                 switch (input.ToLower()) {
                     case "":
                         Print("", 0);
                         break;
                     case "test":
-                        bool ttt;
                         for(int i = 0; i < 20; i++)
                         {
                             var player = Enum.GetNames(typeof(RandomNames))[new Random().Next(Enum.GetNames(typeof(RandomNames)).Length)];
                             var prizer = Enum.GetNames(typeof(RandomPrizes))[new Random().Next(Enum.GetNames(typeof(RandomPrizes)).Length)];
                             //_ = UpdateRewards(player, prizer, 1);
-                            //ttt = await isEligible(player, prizer);
                             _ = Redeemer(player, prizer);
                         }
                         Print($"[System]: Dones", 0);
@@ -305,36 +301,39 @@ namespace ShimamuraBot
                         Modules.OverUnder Game = new Modules.OverUnder("tits");
                         break;
                     case "whisper":
-                        _ = wss.sendMessage("send_whisper", new string[] { tits[2], tits[1], "" });
+                        _ = wss.sendMessage("send_whisper", new string[] { msg, user, "" });
                         break;
                     case "say":
-                        _ = wss.sendMessage("send_message", new string[] { tits[1], "", "" });
+                        _ = wss.sendMessage("send_message", new string[] { msg, "", "" });
                         break;
                     case "mute":
-                        int msgid;
-                        string[] mutemsg;
+                        //int msgid;
+                        //string[] mutemsg;
                         //string mutemsgid;
                         try {
-                            msgid = int.Parse(tits[2]);
+                            throw new NotImplementedException();
+                            //msgid = int.Parse(tits[2]);
                         } catch (Exception e) {
-                            throw new BotException("System", $"Could not parse to int", e);
+                            new BotException("System", $"Could not parse to int", e);
                         }
-                        mutemsg = wss.getMessage(msgid);
-                            _ = wss.sendMessage("mute_user", new string[] { "", mutemsg[0], mutemsg[1] });
+                        //mutemsg = wss.getMessage(msgid);
+                            //_ = wss.sendMessage("mute_user", new string[] { "", mutemsg[0], mutemsg[1] });
                         break;
                     case "exit" or "quit":
                         //TODO: check if connected, if connected await stop(), then close.
                         return;//MainLoop.Stop();
-                        break;
-                    case "start" or "run": //TOSTAY
-                        if (OAuthClient.checkJWT())
-                            if(!wss.Open())
+                    case "start" or "run":
+                        if (OAuthClient.checkJWT()) {
+                            if (!wss.Open())
                                 _ = wss.Connect();
-                        else {
+                        } else {
+                            HTTPServer tempWebserver = new HTTPServer(oAuth); //TODO: make sure it has a proper timeout since it's no longer interactable.
                             var _oauthComplete = await tempWebserver.Start();
-                            if (_oauthComplete)
-                                if(!wss.Open())
+                            if (_oauthComplete) {
+                                tempWebserver = null;//free up for GC
+                                if (!wss.Open())
                                     _ = wss.Connect();
+                            }
                         }
                         break;
                     case "stop":
@@ -345,10 +344,10 @@ namespace ShimamuraBot
                             Print($"[Shimamura]: Bot is not currently active!", 2);
                         break;
                     case "listen"://PRUNE AFTER FLOW HAS BEEN COMPLETE.
-                        _ = tempWebserver.Start();
+                        //_ = tempWebserver.Start();
                         break;
                     case "stoplisten"://PRUNE  AFTER FLOW HAS BEEN COMPLETE.
-                        tempWebserver.Stop();
+                        //tempWebserver.Stop();
                         break;
                     case "exp":
                         if (OAuthClient.checkJWT())
@@ -390,6 +389,7 @@ namespace ShimamuraBot
 
         private static async Task<bool> WaitForClosures()
         {//to even start I need to have a pool of resources to check list down to make sure are closed and disposed or at least gracefully closed.
+            await Task.Delay(100);
             throw new NotImplementedException();
             //return true;
         }
@@ -407,6 +407,7 @@ namespace ShimamuraBot
 
         private static async void CurrentDomainOnProcessExit(object sender, EventArgs eventArgs)
         {
+            await Task.Delay(100);
             Console.WriteLine("Exiting process...");
 
             //var stopped = await Task.Run(() => WaitForClosure());

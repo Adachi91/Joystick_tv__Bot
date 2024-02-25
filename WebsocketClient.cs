@@ -120,7 +120,7 @@ namespace ShimamuraBot
             cts.Cancel();
 
             if (await socketStatus(-1))
-                throw new BotException("Websocket", "The socket did not close within the expected time (Timeout)");
+                throw new BotException("Websocket", "The socket did not close within the expected time (Timeout)"); //TODO: Fix this and find the nearest catcher, or refactor.
 
             if (code < 0)
                 Print($"[Shimamura]: Stopped successful", 1);
@@ -184,12 +184,14 @@ namespace ShimamuraBot
 
         private async Task<bool> onMessage_StreamEvent(string payload) {
             var streamEvent = JsonSerializer.Deserialize<RootStreamEvents>(payload);
-            Print($"[StreamEvent]: idk shit happened :: {streamEvent.message.text}", 1);
+            Print($"[StreamEvent]: idk happened :: {streamEvent.message.text}", 1); //So far: Viewer update, Stream setting update, Stream starting, Stream ending, Stream Ended
             if (streamEvent.message.metadataObject.tipMenuItem == "Remove Bra") vCat.Redeem("tta");
             if (!string.IsNullOrEmpty(streamEvent.message.metadataObject.tipMenuItem)) Print($"[StreamEvent]: !! tipMenuItem :: {streamEvent.message.metadataObject.tipMenuItem}", 2);
 
+            //need to create a Timer class to create a new timer on timed tips e.g. Remove Bra/Mask for 30 minutes as it needs to be tracked internally to communicate with 3rd party apps like vNyan, VTS
+
             //write the code for events on tip
-            _ = WriteToFileShrug("StreamEvent", new string[] { streamEvent.message.createdAt.ToString(), streamEvent.message.text, $"who: {streamEvent.message.metadataObject.who} ::", $"what: {streamEvent.message.metadataObject.what} :: tipmenitem: {streamEvent.message.metadataObject.tipMenuItem} :: prize: {streamEvent.message.metadataObject.prize} :: howMuch: {streamEvent.message.metadataObject.howMuch}" });
+            await WriteToFileShrug("StreamEvent", new string[] { streamEvent.message.createdAt.ToString(), streamEvent.message.text, $"who: {streamEvent.message.metadataObject.who} ::", $"what: {streamEvent.message.metadataObject.what} :: tipmenitem: {streamEvent.message.metadataObject.tipMenuItem} :: prize: {streamEvent.message.metadataObject.prize} :: howMuch: {streamEvent.message.metadataObject.howMuch}" });
             return true;
         }
 
@@ -204,8 +206,8 @@ namespace ShimamuraBot
 
             Print($"[Chat]: {msg.message.author.username}: {msg.message.text}", 1);
             Console.Beep();
-            _ = WriteToFileShrug("ChatMessage", new string[] { msg.message.createdAt.ToString(), $"{ msg.message.author.username}: {msg.message.text}" });
-            if (msg.message.text.StartsWith(".duck")) { DEBUGTIMESTART = GetUnixTimestamp(); vCat.Redeem("duck"); }
+            await WriteToFileShrug("ChatMessage", new string[] { msg.message.createdAt.ToString(), $"{ msg.message.author.username}: {msg.message.text}" });
+            if (msg.message.text.StartsWith(".duck")) vCat.Redeem("duck");
             else if (msg.message.text.StartsWith(".yeet")) vCat.Redeem("yeet");
             else if (msg.message.text.StartsWith(".testing")) vCat.Redeem("tta");
         }
@@ -214,7 +216,7 @@ namespace ShimamuraBot
         private async Task onMessage_PresenceEvent(string payload) {
             var presencemsg = JsonSerializer.Deserialize<RootPresenceEvent>(payload);
             var eveType = presencemsg.message.type == "enter_stream" ? "Entered the chat" : "Left the chat";
-            _ = WriteToFileShrug("UserPresence", new string[] { presencemsg.message.createdAt.ToString(), $"{presencemsg.message.text} {eveType}" });
+            await WriteToFileShrug("UserPresence", new string[] { presencemsg.message.createdAt.ToString(), $"{presencemsg.message.text} {eveType}" });
         }
 
 
@@ -239,13 +241,13 @@ namespace ShimamuraBot
 
             switch (eventType) {
                 case "StreamEvent":
-                    _ = onMessage_StreamEvent(data);
+                    await onMessage_StreamEvent(data);
                     break;
                 case "ChatMessage": //deserialize Root ChatMessage class
-                    _ = onMessage_Message(data);
+                    await onMessage_Message(data);
                     break;
                 case "UserPresence": //deserialize Root UserPresence class
-                    _ = onMessage_PresenceEvent(data);
+                    await onMessage_PresenceEvent(data);
                     break;
                 default: //This shouldn't trigger but if it does capture it so I can inspect what went wrong
                     Print($"[JSONParser]: There was an unexpected request :: eventType: {eventType}, Json Dump: {data}", 3);
@@ -345,10 +347,10 @@ namespace ShimamuraBot
                 } else
                     throw new BotException("Websocket", "Socket did not open in a timely manner");
             } catch (WebSocketException wse) {
-                Print($"[Websocket]: Could not send message: {action} :: text: {dparams[0]} :: username: {dparams[1]} :: messageId: {dparams[2]}", 3);
+                new BotException("Websocket", $"Could not send message: {action} :: text: {dparams[0]} :: username: {dparams[1]} :: messageId: {dparams[2]}");
                 Print($"[Websocket]: The exception was :: {wse}", 0);
             } catch (Exception ex) {
-                Print($"{ex}", 3);
+                new BotException("Websocket", $"Unhandled exception :: ", ex); //TODO: recursive fix BotException(,BotException())
             } finally {
                 messageSemaphore.Release();
                 //if (socket.State != WebSocketState.Open)

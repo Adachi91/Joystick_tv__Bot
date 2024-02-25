@@ -89,12 +89,11 @@ namespace ShimamuraBot
                     //Use IPv4 localhost instead of 'localhost' because it will try and route to IPv6 and bounce around causing up to 1 second latency.
                     await vNyan.ConnectAsync(new Uri("ws://127.0.0.1:8000/vnyan"), default);
                     _ = vNyan.SendAsync(new ArraySegment<byte>(buffer), WebSocketMessageType.Text, true, default);
-                    DEBUGTIMEEND = GetUnixTimestamp();
                 } catch (Exception ex) {
                     Print($"[vNyan]: {ex}", 3);
                 }
 
-                Print($"[vNyan]: Disposing Websocket Client. Total time from message to Closure :: {DEBUGTIMEEND - DEBUGTIMESTART} seconds", 0);
+                Print($"[vNyan]: Disposing Websocket Client.", 0);
             }
         }
     }

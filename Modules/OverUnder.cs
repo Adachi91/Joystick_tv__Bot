@@ -31,7 +31,7 @@ namespace ShimamuraBot.Modules
         public async Task getResults(int result) {
             foreach(var winner in _contestants) {
                 if (winner.Value == result) {
-                    _ = Modules.GamesHandler.UpdateRewards(winner.Key, _prizeredeem, 1);
+                    await Modules.GamesHandler.UpdateRewards(winner.Key, _prizeredeem, 1);
                 }
             }
             //send_message("Over/Under has ended! Congratulations to the winners!") //do not announce all winners could be too large

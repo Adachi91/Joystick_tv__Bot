@@ -157,7 +157,7 @@ namespace ShimamuraBot
             Print($"[Timer]: Attempting to refresh JWT...", 0);
 
             if(GetUnixTimestamp() - APP_JWT_EXPIRY <= 60) {
-                callmewhateverlater(2);
+                _ = callmewhateverlater(2);
             }
         }
     }
