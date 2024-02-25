@@ -1,13 +1,13 @@
 ﻿using System;
-using System.Collections.Generic;
+//using System.Collections.Generic;
 using System.Linq;
 using System.Net.Http.Headers;
 using System.Net.Http;
 using System.Text;
 using System.Text.Json;
-using System.Threading;
+//using System.Threading;
 using System.Threading.Tasks;
-using System.ComponentModel.Design;
+//using System.ComponentModel.Design;
 
 namespace ShimamuraBot
 {
@@ -30,7 +30,7 @@ namespace ShimamuraBot
                 _oauthCode = value;
                 if (!string.IsNullOrEmpty(_oauthCode))
                     if (!checkJWT())
-                        callmewhateverlater(1);
+                        _ = callmewhateverlater(1);
             }
         }
         private string _oauthCode;
@@ -47,7 +47,7 @@ namespace ShimamuraBot
         /// <param name="_scope">Scope (optional) should be bot</param>
         public OAuthClient(string _host, string _client_id, string _client_secret, string _authorize_uri, string _token_uri, string _redirect_uri, string _scope = "ALLURBASES")
         {
-            if (!_host.StartsWith("https://")) {
+            if (!_host.ToLower().StartsWith("https://")) {
                 Print($"[OAuth]: Could not construct the OAuth class. The Scheme detected was not HTTPS", 3);
                 return;
             }

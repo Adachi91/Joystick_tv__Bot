@@ -4,14 +4,15 @@ using System.Collections;
 using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
-using System.Threading.Channels;
+//using System.Threading.Channels;
 using System.Collections.Generic;
 using System.Linq;
-using System.Security.Cryptography.X509Certificates;
+//using System.Security.Cryptography.X509Certificates;
 using System.Text;
-using System.Runtime.CompilerServices;
-using System.Reflection.Metadata;
+//using System.Runtime.CompilerServices;
+//using System.Reflection.Metadata;
 using System.Timers;
+using static System.Runtime.InteropServices.JavaScript.JSType;
 
 namespace ShimamuraBot
 {
@@ -21,10 +22,10 @@ namespace ShimamuraBot
         //public const string EASTER_EGG = "GAJ9MDCDIDEAHDTC9D9DEAADTCEAXCHDLAGDEAPC9DFDXCVCWCHDQAJ9HDTC9D9DEAADTCEASBLAADEAUCCDFDVCXCJDTCBDEAHDCDBDXCVCWCHDQAJ9QCIDHDEABDCDQCCDSCMDEARCPCBDEAGDPCJDTCEAADTCEABDCDKDQAJ9SBLAADEAWCCD9DSCXCBDVCEAIDDDEAPCEA9DXCVCWCHDQAJ9RCWCPCGDXCBDVCEACDIDHDEAHDWCTCEASCPCFDZCBDTCGDGDEAXCBDGDXCSCTCQAJ9RCPCIDGDTCEABDCDQCCDSCMDEARCPCBDEAGDPCJDTCEAADTCSAJ9GA";
         public static int LoopbackPort = 8087;
 
-        public static string HOST;
-        public static string CLIENT_ID;
-        public static string CLIENT_SECRET;
-        public static string WSS_HOST;
+        public static string HOST = null;
+        public static string CLIENT_ID = null;
+        public static string CLIENT_SECRET = null;
+        public static string WSS_HOST = null;
         public static string WSS_GATEWAY;
         public static string ACCESS_TOKEN; // B64 token
         public static object GATEWAY_IDENTIFIER;
@@ -32,6 +33,7 @@ namespace ShimamuraBot
         public static long APP_JWT_EXPIRY;
         public static string APP_JWT_REFRESH;
         public static string ENVIRONMENT_PATH;
+        public static string CHANNELGUID = null;
 
         public const string HISTORY_PATH = @"shimamura.log";
         public static bool LOGGING_ENABLED = false;
@@ -123,6 +125,53 @@ namespace ShimamuraBot
         private static HTTPServer tempWebserver;
         private static VNyan vCat = new VNyan();
         private static MainThread MainLoop = new MainThread();
+
+        //only used for Module.Gamehandler testing
+        private enum RandomNames {
+            John,
+            Jim,
+            Mike,
+            Paul,
+            Roger,
+            Jack,
+            Chris,
+            Jesus,
+            Pickle,
+            Slimeywiley,
+            Jackass,
+            Dopeshit,
+            TAsskmunch,
+            TacoBell,
+            Jason,
+            Razhal,
+            Pain,
+            Tickles,
+            KittnLuvr44
+        }
+
+        private enum RandomPrizes {
+            Tickle,
+            Duckie,
+            Fuck,
+            Throw,
+            Yeet
+        }
+        private static async Task Redeemer(string username, string prize)
+        {
+            var f = await isEligible(username, prize);
+            if (f)
+                Print($"[Redeemer]: {username} Redeeming {prize}", 0);
+            else
+                Print($"[Redeemer]: {username} Could not redeem {prize}, no points", 0);
+        }
+        //end test purge
+
+        /// <summary>
+        ///  Entry point
+        /// </summary>
+        /// <param name="args">Maybe</param>
+        /// <returns></returns>
+        /// <exception cref="BotException"></exception>
         async static Task Main(string[] args)
         {
             AppDomain.CurrentDomain.ProcessExit += CurrentDomainOnProcessExit;
@@ -197,10 +246,42 @@ namespace ShimamuraBot
             while (true) {
                 string input = Console.ReadLine();
                 var msg = "";
-                if(input.StartsWith("test")) {
+                var user = "";
+                if(input.StartsWith("etest")) {
                     var tmp = input.Split(" ", 2, StringSplitOptions.RemoveEmptyEntries);
                     input = tmp[0];
                     msg = tmp[1];
+                }
+
+                string[] tits;
+                if (input.ToLower().StartsWith("say"))
+                {
+                    tits = input.Split(" ", 2, StringSplitOptions.RemoveEmptyEntries);
+                    input = tits[0];
+                    msg = tits[1];
+                }
+                else if (input.ToLower().StartsWith("lilpeep"))
+                {
+                    tits = input.Split(" ", 3, StringSplitOptions.RemoveEmptyEntries);
+                    input = tits[0];
+                    user = tits[1];
+                    msg = tits[2];
+                }
+                else
+                {
+                    tits = input.Split(" ", StringSplitOptions.RemoveEmptyEntries);
+                    input = tits[0];
+
+                    string[] tmptits = new string[tits.Length - 1];
+
+                    for (int i = 0; i < tits.Length; i++)
+                    {
+                        if (i == 0)
+                            continue;
+                        else
+                            tmptits[i - 1] = tits[i];
+                    }
+                    tits = tmptits;
                 }
 
                 switch (input.ToLower()) {
@@ -208,37 +289,60 @@ namespace ShimamuraBot
                         Print("", 0);
                         break;
                     case "test":
-                        /*
-                         * 
-                         * TEST ing areai
-                         * 
-                         * 
-                         */
-                        ///if(msg.Contains("sample")) { var c = wss.testMessage("", true); continue; }
-
-                        //var t = wss.testMessage(msg);
-                        _ = wss.sendMessage("send_message", new string[] { "", msg, "", "" });
-                        //t.Replace("\\\\\u0022", "f");
-                        //Print($"[ShimamuraJSON]: {t}", 0);
+                        bool ttt;
+                        for(int i = 0; i < 20; i++)
+                        {
+                            var player = Enum.GetNames(typeof(RandomNames))[new Random().Next(Enum.GetNames(typeof(RandomNames)).Length)];
+                            var prizer = Enum.GetNames(typeof(RandomPrizes))[new Random().Next(Enum.GetNames(typeof(RandomPrizes)).Length)];
+                            //_ = UpdateRewards(player, prizer, 1);
+                            //ttt = await isEligible(player, prizer);
+                            _ = Redeemer(player, prizer);
+                        }
+                        Print($"[System]: Dones", 0);
                         break;
-                    case "lilpeep":
-                        ///_ = wss.testMessage("fuck");
+                    case "overunder":
+                        //start a new game of over/under
+                        Modules.OverUnder Game = new Modules.OverUnder("tits");
+                        break;
+                    case "whisper":
+                        _ = wss.sendMessage("send_whisper", new string[] { tits[2], tits[1], "" });
+                        break;
+                    case "say":
+                        _ = wss.sendMessage("send_message", new string[] { tits[1], "", "" });
+                        break;
+                    case "mute":
+                        int msgid;
+                        string[] mutemsg;
+                        //string mutemsgid;
+                        try {
+                            msgid = int.Parse(tits[2]);
+                        } catch (Exception e) {
+                            throw new BotException("System", $"Could not parse to int", e);
+                        }
+                        mutemsg = wss.getMessage(msgid);
+                            _ = wss.sendMessage("mute_user", new string[] { "", mutemsg[0], mutemsg[1] });
                         break;
                     case "exit" or "quit":
+                        //TODO: check if connected, if connected await stop(), then close.
                         return;//MainLoop.Stop();
                         break;
                     case "start" or "run": //TOSTAY
                         if (OAuthClient.checkJWT())
-                            _ = wss.Connect();
+                            if(!wss.Open())
+                                _ = wss.Connect();
                         else {
                             var _oauthComplete = await tempWebserver.Start();
                             if (_oauthComplete)
-                                _ = wss.Connect();
+                                if(!wss.Open())
+                                    _ = wss.Connect();
                         }
                         break;
                     case "stop":
-                        Print($"[Shimamura]: Stopping bot", 1);
+                        if (wss.Open()) {
+                            Print($"[Shimamura]: Stopping bot...", 1);
                             _ = wss.Close(-1);
+                        } else
+                            Print($"[Shimamura]: Bot is not currently active!", 2);
                         break;
                     case "listen"://PRUNE AFTER FLOW HAS BEEN COMPLETE.
                         _ = tempWebserver.Start();

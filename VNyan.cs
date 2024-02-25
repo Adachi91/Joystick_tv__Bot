@@ -16,8 +16,8 @@ namespace ShimamuraBot
     /// </summary>
     internal class VNyan
     {
-        private CancellationTokenSource cts = new CancellationTokenSource();
-        private CancellationToken cancelRequest = new CancellationToken();
+        //private CancellationTokenSource cts = new CancellationTokenSource();
+        //private CancellationToken cancelRequest = new CancellationToken();
 
         public void Redeem(string type) { //TODO: add a check to make sure ws connectivity is available for vNyan otherwise return a user friendly message
             switch(type) {
@@ -39,7 +39,7 @@ namespace ShimamuraBot
         }
         public void stopvNyan()
         {
-            cts.Cancel();
+            //cts.Cancel();
         }
 
         private async void SendTovNyan(string msg)
@@ -87,13 +87,14 @@ namespace ShimamuraBot
 
                 try {
                     //Use IPv4 localhost instead of 'localhost' because it will try and route to IPv6 and bounce around causing up to 1 second latency.
-                    await vNyan.ConnectAsync(new Uri("ws://127.0.0.1:8000/vnyan"), cancelRequest);
-                    vNyan.SendAsync(new ArraySegment<byte>(buffer), WebSocketMessageType.Text, true, cancelRequest);
+                    await vNyan.ConnectAsync(new Uri("ws://127.0.0.1:8000/vnyan"), default);
+                    _ = vNyan.SendAsync(new ArraySegment<byte>(buffer), WebSocketMessageType.Text, true, default);
+                    DEBUGTIMEEND = GetUnixTimestamp();
                 } catch (Exception ex) {
-                    Print($"{ex}", 3);
+                    Print($"[vNyan]: {ex}", 3);
                 }
 
-                Print("[vNyan]: Disposing Websocket Client", 0);
+                Print($"[vNyan]: Disposing Websocket Client. Total time from message to Closure :: {DEBUGTIMEEND - DEBUGTIMESTART} seconds", 0);
             }
         }
     }

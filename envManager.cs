@@ -2,9 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
-using System.Threading.Tasks;
 using System.IO;
-using static System.Runtime.InteropServices.JavaScript.JSType;
 
 namespace ShimamuraBot
 {
@@ -39,6 +37,7 @@ namespace ShimamuraBot
                     "JWT_REFRESH" => APP_JWT_REFRESH = split[1],
                     "JWT_EXPIRE" => tmp = split[1], //TODO extract from JWT and delete this entry.
                     "LOGGING" => _logging = split[1],
+                    "CHANNELGUID" => CHANNELGUID = split[1],
                     _ => throw new Exception($"The Enviroment Keys in are not structured properly in the .env file{Environment.NewLine}The minimum is required{Environment.NewLine}HOST=HOST_URL{Environment.NewLine}CLIENT_ID=YOUR_CLIENT_ID{Environment.NewLine}CLIENT_SECRET=YOUR_CLIENT_SECRET{Environment.NewLine}WSS_HOST=THE_WSS_ENDPOINT{Environment.NewLine}")
                 };
             }
@@ -62,7 +61,7 @@ namespace ShimamuraBot
 
             if(_defaults) {
                 env = new Dictionary<string, string> {
-                    ["HOST"] = "",
+                    ["HOST"] = "Https://example.net",
                     ["CLIENT_ID"] = "YOUR_CLIENT_ID",
                     ["CLIENT_SECRET"] = "YOUR_CLIENT_SECRET",
                     ["WSS_HOST"] = "WSS_ENDPOINT",
@@ -75,6 +74,7 @@ namespace ShimamuraBot
                 env["JWT_REFRESH"] = APP_JWT_REFRESH ?? "";
                 env["JWT_EXPIRE"] = APP_JWT_EXPIRY.ToString() ?? "";
                 env["LOGGING"] = LOGGING_ENABLED.ToString();
+                env["CHANNELGUID"] = CHANNELGUID ?? "";
             }
 
             var values = env.Select(kv => $"{kv.Key}={kv.Value}");
@@ -136,6 +136,15 @@ namespace ShimamuraBot
                  *      "command": "yeet",
                  *     
                  *  }
+                 *  
+                 *  {
+                 *      "module": "native",
+                 *      "data": [
+                 *          "type": "sound",
+                 *          "
+                 *      ]
+                 *  }
+                 *  
                  */
 
 

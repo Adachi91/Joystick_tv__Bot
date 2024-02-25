@@ -2,7 +2,7 @@
 
 namespace ShimamuraBot
 {
-    static class Formatter
+    internal class Formatter
     {
 
         #region Print Functionality
@@ -49,6 +49,42 @@ namespace ShimamuraBot
         }
 
 
+        //leaving this because I found duplicate code from debugger by seeing a lot ascii char' loaded into memory twice, and was like hmm? and searched
+        //ProbabilisticWithAsciiCharSearchValues and found a reference to it and indexing and figured it might be indexOf was well. Toplol debugging to find a duplicate line of code
+        //Maybe I should pay more attention to "Reference" counter at the top of methods.
+        /*private static string[] formatPrint(string txt)
+        {
+            string[] holder = { "", "" };
+            int startIndex = -1;
+            int endIndex = -1;
+
+            for (int i = 0; i < txt.Length; i++)
+            {
+                if (txt[i] == '[' && startIndex == -1)
+                {
+                    startIndex = i;
+                }
+                else if (txt[i] == ']' && startIndex != -1)
+                {
+                    endIndex = i;
+                    break; // Stop iterating once the end index is found
+                }
+            }
+
+            if (startIndex == 0 && endIndex > startIndex && endIndex + 2 < txt.Length && txt[endIndex + 1] == ':' && txt[endIndex + 2] == ' ')
+            {
+                holder[0] = txt.Substring(startIndex, endIndex - startIndex + 1);
+                holder[1] = txt.Substring(endIndex + 3).Trim();
+            }
+            else
+            {
+                holder[1] = txt;
+            }
+
+            return holder;
+        }*/
+
+
         /// <summary>
         /// Why? because I'm nuts, and I like lua, so fuck me, no fuck you, idk could be enjoyable. Also fuck that one mother fucker on github for saying that Vulva is a profane word, you fucking moron. What? I can go on rants inside method descriptors.
         /// </summary>
@@ -68,7 +104,7 @@ namespace ShimamuraBot
                         Console.ForegroundColor = debug; Console.Write($" [Debug]{ctx[0]}:"); Console.ForegroundColor = current; Console.Write($" {ctx[1]}{Environment.NewLine}"); 
                     #endif
                     break;
-                case 1: ctx = formatPrint(text); Console.WriteLine($" [System]{ctx[0]}: {ctx[1]}");
+                case 1: /*ctx = formatPrint(text);*/ Console.WriteLine($" [System]{ctx[0]}: {ctx[1]}");
                     break;
                 case 2: Console.ForegroundColor = warn; Console.Write($" [WARN]{ctx[0]}:"); Console.ForegroundColor = current; Console.Write($" {ctx[1]}{Environment.NewLine}");
                     break;
