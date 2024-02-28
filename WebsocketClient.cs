@@ -45,7 +45,7 @@ namespace ShimamuraBot
         private long _TTLR { get; set; } = 0; //Time To Last Reconnect
         private long _lastping { get; set; } = 0;
         private string channelId { get; set; } = string.Empty;
-        private string GatewayChannel { get; } = JsonSerializer.Serialize(GATEWAY_IDENTIFIER);
+        private string GatewayChannel { get; } = JsonSerializer.Serialize(new { channel = "GatewayChannel" });
 
         private Dictionary<int, string> chatHistory = new Dictionary<int, string>(); //For message deletion, muting, and blocking (severe)
         private List<string> chatHistory2 = new List<string>();
@@ -64,8 +64,12 @@ namespace ShimamuraBot
         /// Constructs the WebSocket client
         /// </summary>
         public WebsocketClient() {
-            if (!string.IsNullOrEmpty(CHANNELGUID))
-                channelId = CHANNELGUID;
+            /*if (!string.IsNullOrEmpty(CHANNELGUID))
+                channelId = CHANNELGUID;*/
+        }
+
+        public void updateshit() {
+            if (!string.IsNullOrEmpty(CHANNELGUID)) channelId = CHANNELGUID;
         }
 
 
@@ -86,9 +90,6 @@ namespace ShimamuraBot
 
             if(await socketStatus()) {
                 _ = sendMessage("subscribe", new string[] { "", "", "" });
-            } else {
-                Print("[Websocket]: Timeout sending Subscribe message to socket.", 3);
-                _ = Close();
             }
         }
 
@@ -131,14 +132,17 @@ namespace ShimamuraBot
         ///  Returns the status of the socket
         /// </summary>
         /// <returns>Bool - True if available for usage, otherwise False</returns>
-        private async Task<bool> socketStatus(int code = 0) {
+        private async Task<bool> socketStatus(int code = 0) { //-1 is awaiting closure so if it's <0 it's a CLOSURE check. OTHERWISE figure it the fuck out.
             long socketWait = GetUnixTimestamp();
 
             while(true) {
                 if (socket != null)
                 {
                     if (socket.State == WebSocketState.Open && code < 0 && (GetUnixTimestamp() - socketWait > 7))
-                        return true;
+                        return false;
+
+                    if ((socket.State != WebSocketState.Open || socket.State == WebSocketState.Closed) && code < 0)
+                        return false;
 
                     if (socket.State == WebSocketState.Open && code >= 0)
                         return true;
@@ -184,13 +188,16 @@ namespace ShimamuraBot
 
         private async Task<bool> onMessage_StreamEvent(string payload) {
             var streamEvent = JsonSerializer.Deserialize<RootStreamEvents>(payload);
-            Print($"[StreamEvent]: idk happened :: {streamEvent.message.text}", 1); //So far: Viewer update, Stream setting update, Stream starting, Stream ending, Stream Ended
             if (streamEvent.message.metadataObject.tipMenuItem == "Remove Bra") vCat.Redeem("tta");
             if (!string.IsNullOrEmpty(streamEvent.message.metadataObject.tipMenuItem)) Print($"[StreamEvent]: !! tipMenuItem :: {streamEvent.message.metadataObject.tipMenuItem}", 2);
 
+            if (streamEvent.message.metadataObject.what == "followed") { Print($"[Shimamura]: A new follower has appeared! Say hi to {streamEvent.message.metadataObject.who}!", 1); await sendMessage("send_message", new string[] { $"Welcome to the Cherry Blossoms {streamEvent.message.metadataObject.who}. Thanks so much for the Follow !" }); return true; }
+            if (streamEvent.message.type == "ViewerCountUpdated") { Console.Title = $"♥ Shimamura :: {streamEvent.message.metadataObject.numberOfViewers.ToString()} ♥"; return true; }
             //need to create a Timer class to create a new timer on timed tips e.g. Remove Bra/Mask for 30 minutes as it needs to be tracked internally to communicate with 3rd party apps like vNyan, VTS
 
+            Print($"[StreamEvent]: idk happened :: {streamEvent.message.text}", 1); //So far: Viewer update, Stream setting update, Stream starting, Stream ending, Stream Ended
             //write the code for events on tip
+            //if()
             await WriteToFileShrug("StreamEvent", new string[] { streamEvent.message.createdAt.ToString(), streamEvent.message.text, $"who: {streamEvent.message.metadataObject.who} ::", $"what: {streamEvent.message.metadataObject.what} :: tipmenitem: {streamEvent.message.metadataObject.tipMenuItem} :: prize: {streamEvent.message.metadataObject.prize} :: howMuch: {streamEvent.message.metadataObject.howMuch}" });
             return true;
         }
@@ -242,6 +249,7 @@ namespace ShimamuraBot
             switch (eventType) {
                 case "StreamEvent":
                     await onMessage_StreamEvent(data);
+                    await WriteToFileShrug("StreamEvent", new string[] { DateTime.UtcNow.ToString(), "Raw dump :: ", $"{data}", " ::end" });
                     break;
                 case "ChatMessage": //deserialize Root ChatMessage class
                     await onMessage_Message(data);
@@ -324,6 +332,11 @@ namespace ShimamuraBot
             }
         }
 
+        public async Task<bool> sendMessage(string action, bool external, params string[] dparams) {
+            if (socket.State != WebSocketState.Open) throw new BotException("Websocket", "There is no open socket, please start the socket first.");
+
+            return await sendMessage(action, dparams);
+        }
 
         /// <summary>
         ///  Websocket Writer - Send message to the socket and wait for success or failure
@@ -349,8 +362,10 @@ namespace ShimamuraBot
             } catch (WebSocketException wse) {
                 new BotException("Websocket", $"Could not send message: {action} :: text: {dparams[0]} :: username: {dparams[1]} :: messageId: {dparams[2]}");
                 Print($"[Websocket]: The exception was :: {wse}", 0);
+            } catch (BotException) {
+
             } catch (Exception ex) {
-                new BotException("Websocket", $"Unhandled exception :: ", ex); //TODO: recursive fix BotException(,BotException())
+                new BotException("Websocket", $"Unhandled exception ", ex);
             } finally {
                 messageSemaphore.Release();
                 //if (socket.State != WebSocketState.Open)
@@ -468,6 +483,7 @@ namespace ShimamuraBot
             public int? howMuch { get; set; }
             public string tipMenuItem { get; set; }
             public string prize { get; set; }
+            public int? numberOfViewers { get; set; }
         }
         #endregion
 

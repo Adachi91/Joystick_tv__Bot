@@ -16,9 +16,8 @@
 # Mono auto generated files
 mono_crash.*
 
-# Sensitive
-[Tt]oken.cs
-[Jj]oystick_[Bb]ot_[Aa][Pp][Ii].md
+# Personal
+Modules/FoolForLove.cs
 
 # Build results
 [Dd]ebug/

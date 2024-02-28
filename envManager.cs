@@ -38,6 +38,7 @@ namespace ShimamuraBot
                     "JWT_EXPIRE" => tmp = split[1], //TODO extract from JWT and delete this entry.
                     "LOGGING" => _logging = split[1],
                     "CHANNELGUID" => CHANNELGUID = split[1],
+                    "DISCORDHOOK" => DISCORD_URI = split[1],
                     _ => throw new BotException("Environment", $"The Enviroment Keys in are not structured properly in the .env file{Environment.NewLine}The minimum is required{Environment.NewLine}HOST=HOST_URL{Environment.NewLine}CLIENT_ID=YOUR_CLIENT_ID{Environment.NewLine}CLIENT_SECRET=YOUR_CLIENT_SECRET{Environment.NewLine}WSS_HOST=THE_WSS_ENDPOINT{Environment.NewLine}")
                 };
             }
@@ -45,7 +46,6 @@ namespace ShimamuraBot
             if (HOST == null || CLIENT_ID == null || CLIENT_SECRET == null || WSS_HOST == null) throw new Exception($"One or more values in the environment file was not found{Environment.NewLine}The minimum is required{Environment.NewLine}HOST=HOST_URL{Environment.NewLine}CLIENT_ID=YOUR_CLIENT_ID{Environment.NewLine}CLIENT_SECRET=YOUR_CLIENT_SECRET{Environment.NewLine}WSS_HOST=THE_WSS_ENDPOINT{Environment.NewLine}");
 
             ACCESS_TOKEN = Convert.ToBase64String(Encoding.UTF8.GetBytes($"{CLIENT_ID}:{CLIENT_SECRET}"));
-            GATEWAY_IDENTIFIER = new { channel = "GatewayChannel" };
             WSS_GATEWAY = $"{WSS_HOST}?token={ACCESS_TOKEN}"; //not anymore :) //this needs to be set where JWT is handled.
             if (!string.IsNullOrEmpty(tmp)) APP_JWT_EXPIRY = Convert.ToInt64(tmp);
             if(!string.IsNullOrEmpty(_logging)) LOGGING_ENABLED = Convert.ToBoolean(_logging);
@@ -61,7 +61,7 @@ namespace ShimamuraBot
 
             if(_defaults) {
                 env = new Dictionary<string, string> {
-                    ["HOST"] = "Https://example.net",
+                    ["HOST"] = "https://example.net",
                     ["CLIENT_ID"] = "YOUR_CLIENT_ID",
                     ["CLIENT_SECRET"] = "YOUR_CLIENT_SECRET",
                     ["WSS_HOST"] = "WSS_ENDPOINT",

@@ -21,6 +21,7 @@ namespace ShimamuraBot
         //if you decode it let me know -adachi
         //public const string EASTER_EGG = "GAJ9MDCDIDEAHDTC9D9DEAADTCEAXCHDLAGDEAPC9DFDXCVCWCHDQAJ9HDTC9D9DEAADTCEASBLAADEAUCCDFDVCXCJDTCBDEAHDCDBDXCVCWCHDQAJ9QCIDHDEABDCDQCCDSCMDEARCPCBDEAGDPCJDTCEAADTCEABDCDKDQAJ9SBLAADEAWCCD9DSCXCBDVCEAIDDDEAPCEA9DXCVCWCHDQAJ9RCWCPCGDXCBDVCEACDIDHDEAHDWCTCEASCPCFDZCBDTCGDGDEAXCBDGDXCSCTCQAJ9RCPCIDGDTCEABDCDQCCDSCMDEARCPCBDEAGDPCJDTCEAADTCSAJ9GA";
         public static int LoopbackPort = 8087;
+        private static WebsocketClient wss = new WebsocketClient();
 
         public static string HOST = null;
         public static string CLIENT_ID = null;
@@ -28,7 +29,6 @@ namespace ShimamuraBot
         public static string WSS_HOST = null;
         public static string WSS_GATEWAY;
         public static string ACCESS_TOKEN; // B64 token
-        public static object GATEWAY_IDENTIFIER;
         public static string APP_JWT; //bearer interact outside of message/events
         public static long APP_JWT_EXPIRY;
         public static string APP_JWT_REFRESH;
@@ -37,6 +37,11 @@ namespace ShimamuraBot
 
         public const string HISTORY_PATH = @"shimamura.log";
         public static bool LOGGING_ENABLED = false;
+
+        //Modules - Only loading global most likely used.
+        public static bool MODULE_CONFIGURATION = false; //will be used to pause buffer output while configuring modules, should I just make a GUI in VB to track their IP address? (I WILL BRING BACK DEAD MEMES)
+        public static string DISCORD_URI = null;
+
 
         public static System.Timers.Timer TimingBelt = new System.Timers.Timer(1000); /*TimingBelt = new Timer((cb) => { 
             
@@ -85,7 +90,7 @@ namespace ShimamuraBot
             //mainloop shit below this line turn back you don't want to die by reading what's below.
             //private static HTTPServer server;
             public void Start() { MainLoop.Start(new { isExiting = cancellationToken }); }
-            public void Touchy() { tempWebserver.Stop(); }
+            //public void Touchy() { tempWebserver.Stop(); }
 
             private Thread MainLoop = new Thread((object obj) => { //DOES THIS SHIT EVEN EXECUTE?!?!?
                 //There are a lot of off-side threads running taskes such as tcp connections
@@ -165,6 +170,67 @@ namespace ShimamuraBot
         }
         //end test purge
 
+        private enum userInputs
+        {
+            say = 2,
+            whisper = 3,
+            mute = 3,
+            test = 3,
+        }
+
+
+        private static int? GetEnumValueIfStartsWith(string input) {
+            foreach (var enumName in Enum.GetNames(typeof(userInputs))) {
+                if (input.StartsWith(enumName)) {
+                    userInputs enumValue = (userInputs)Enum.Parse(typeof(userInputs), enumName);
+                    return (int)enumValue;
+                }
+            }
+            return null;
+        }
+
+
+        private static string[] user_InputParser(string input)
+        {
+            string[] strings = null;
+
+            int? enumValue = GetEnumValueIfStartsWith(input);
+            if (enumValue.HasValue)
+            {
+                string[] tmp = new string[enumValue.Value];
+                strings = input.Split(" ", enumValue.Value);
+                if (strings.Length < tmp.Length)
+                {
+                    for (int i = 0; i < tmp.Length; i++)
+                    {
+                        if (i > strings.Length - 1)
+                            tmp[i] = "";
+                        else
+                            tmp[i] = strings[i];
+
+                        /*if (string.IsNullOrEmpty(strings[i]))
+                                tmp[i] = "";
+                        else
+                                tmp[i] = strings[i];*/
+                    }
+                    strings = new string[tmp.Length];
+                    strings = tmp;
+                }
+            } else {
+                strings = input.Split(" ", StringSplitOptions.RemoveEmptyEntries);
+            }
+
+            return strings;
+        }
+
+        public static async Task SendMessage(string action, params string[] dparams) {
+            try {
+                await wss.sendMessage(action, true, dparams);
+            } catch (BotException) { } catch(Exception ex) {
+                new BotException("Websocket", "Unhandled exception", ex);
+            }
+        }
+
         /// <summary>
         ///  Entry point
         /// </summary>
@@ -191,9 +257,8 @@ namespace ShimamuraBot
                 }
             }
 
-            try {
-                envManager.load();
-            } catch (Exception ex) { //TODO: Fix the error it will most likely return is BotException which will be recursive.
+            try { envManager.load(); wss.updateshit(); }
+            catch (BotException) { } catch (Exception ex) {
                 Print($"[Environment]: {ex}", 3);
             }
 
@@ -207,7 +272,7 @@ namespace ShimamuraBot
                 "bot"
             );
 
-            WebsocketClient wss = new WebsocketClient();
+            Console.Title = "♥ Shimamura :: 0 ♥";
 
             TimingBelt.Enabled = true;
             TimingBelt.Elapsed += TimerTimy;
@@ -243,7 +308,7 @@ namespace ShimamuraBot
 
             while (true) {
                 string input = Console.ReadLine();
-                var msg = "";
+                /*var msg = "";
                 var user = "";
                 if(input.StartsWith("etest")) {
                     var tmp = input.Split(" ", 2, StringSplitOptions.RemoveEmptyEntries);
@@ -264,7 +329,8 @@ namespace ShimamuraBot
                     input = tits[0];
                     user = tits[1];
                     msg = tits[2];
-                }
+                }*/
+                string[] msg = user_InputParser(input);
                 /*else
                 {
                     tits = input.Split(" ", StringSplitOptions.RemoveEmptyEntries);
@@ -282,29 +348,34 @@ namespace ShimamuraBot
                     tits = tmptits;
                 }*/
 
-                switch (input.ToLower()) {
+                switch (msg[0].ToLower()) {
                     case "":
                         Print("", 0);
                         break;
                     case "test":
-                        for(int i = 0; i < 20; i++)
+                        /*for(int i = 0; i < 20; i++)
                         {
                             var player = Enum.GetNames(typeof(RandomNames))[new Random().Next(Enum.GetNames(typeof(RandomNames)).Length)];
                             var prizer = Enum.GetNames(typeof(RandomPrizes))[new Random().Next(Enum.GetNames(typeof(RandomPrizes)).Length)];
                             //_ = UpdateRewards(player, prizer, 1);
                             _ = Redeemer(player, prizer);
-                        }
-                        Print($"[System]: Dones", 0);
+                        }*/
+                        //_ = Modules.ModuleLoader.LoadSettings();
+                        ///Print($"{DISCORD_URI}", 0);
+                        break;
+                        Modules.DiscordWebhook webhookd = new Modules.DiscordWebhook(DISCORD_URI, "♥ Coding/Cyberpunk ♥", "I'm coding, and then playing Cyberpunk This is a test message n shit \n new line test \r\n linefeed + carriage return test");
+                        _ = webhookd.SendDiscordWebHook();
+                        Print($"[System]: Dones {msg[1]}", 0);
                         break;
                     case "overunder":
                         //start a new game of over/under
                         Modules.OverUnder Game = new Modules.OverUnder("tits");
                         break;
                     case "whisper":
-                        _ = wss.sendMessage("send_whisper", new string[] { msg, user, "" });
+                        _ = SendMessage("send_whisper", new string[] { msg[2], msg[1], "" });
                         break;
                     case "say":
-                        _ = wss.sendMessage("send_message", new string[] { msg, "", "" });
+                        _ = SendMessage("send_message", new string[] { msg[1], "", "" });
                         break;
                     case "mute":
                         //int msgid;
@@ -320,8 +391,9 @@ namespace ShimamuraBot
                             //_ = wss.sendMessage("mute_user", new string[] { "", mutemsg[0], mutemsg[1] });
                         break;
                     case "exit" or "quit":
-                        //TODO: check if connected, if connected await stop(), then close.
-                        return;//MainLoop.Stop();
+                        if (wss.Open())
+                            await wss.Close(-1);
+                        return;
                     case "start" or "run":
                         if (OAuthClient.checkJWT()) {
                             if (!wss.Open())
@@ -339,7 +411,11 @@ namespace ShimamuraBot
                     case "stop":
                         if (wss.Open()) {
                             Print($"[Shimamura]: Stopping bot...", 1);
-                            _ = wss.Close(-1);
+                            try {
+                                _ = wss.Close(-1);
+                            } catch (BotException) {} catch (Exception e) {
+                                new BotException("Websocket", "Unhandled exception", e);
+                            }
                         } else
                             Print($"[Shimamura]: Bot is not currently active!", 2);
                         break;

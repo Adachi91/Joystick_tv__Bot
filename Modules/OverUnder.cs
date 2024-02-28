@@ -16,7 +16,7 @@ namespace ShimamuraBot.Modules
         public OverUnder(string prize) {
             _prizeredeem = prize;
             _open = true;
-            //send_message("A new Over/Under has been started! place your bets for a free {prize} redeem")
+            _ = SendMessage("send_message", new string[] { $"A new Over/Under game has started! place your bets now for free redeem of {prize}. To enter type .over or .under" });
         }
 
         public void addContestant(string contestant, int bet) {
@@ -26,6 +26,7 @@ namespace ShimamuraBot.Modules
 
         public void closeEntry() {
             _open = false;
+            _ = SendMessage("send_message", new string[] { "Over/Under entries have been closed!" });
         }
 
         public async Task getResults(int result) {
@@ -34,7 +35,7 @@ namespace ShimamuraBot.Modules
                     await Modules.GamesHandler.UpdateRewards(winner.Key, _prizeredeem, 1);
                 }
             }
-            //send_message("Over/Under has ended! Congratulations to the winners!") //do not announce all winners could be too large
+            _ = SendMessage("send_message", new string[] { $"Over/Under has ended! Congratulations to the winners!" });
         }
     }
 }
