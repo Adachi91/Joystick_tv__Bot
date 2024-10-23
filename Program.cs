@@ -4,13 +4,9 @@ using System.Collections;
 using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
-//using System.Threading.Channels;
 using System.Collections.Generic;
 using System.Linq;
-//using System.Security.Cryptography.X509Certificates;
 using System.Text;
-//using System.Runtime.CompilerServices;
-//using System.Reflection.Metadata;
 using System.Timers;
 using static System.Runtime.InteropServices.JavaScript.JSType;
 
@@ -34,11 +30,14 @@ namespace ShimamuraBot
         public static string APP_JWT_REFRESH;
         public static string ENVIRONMENT_PATH;
         public static string CHANNELGUID = null;
+        public static VNyan vNyan = null;
+        public static bool IS_WIN = true; // I'm so sorry *Nix and MacOS users. I simply don't want to include 3rd party libraries outside of .net :| TODO: Figure out ALSA api
 
         public const string HISTORY_PATH = @"shimamura.log";
         public static bool LOGGING_ENABLED = false;
 
         //Modules - Only loading global most likely used.
+        public static string NOV_M = string.Empty;
         public static bool MODULE_CONFIGURATION = false; //will be used to pause buffer output while configuring modules, should I just make a GUI in VB to track their IP address? (I WILL BRING BACK DEAD MEMES)
         public static string DISCORD_URI = null;
 
@@ -127,48 +126,7 @@ namespace ShimamuraBot
         #endregion
 
         private static OAuthClient oAuth;
-        private static VNyan vCat = new VNyan();
         private static MainThread MainLoop = new MainThread();
-
-        //only used for Module.Gamehandler testing
-        private enum RandomNames {
-            John,
-            Jim,
-            Mike,
-            Paul,
-            Roger,
-            Jack,
-            Chris,
-            Jesus,
-            Pickle,
-            Slimeywiley,
-            Jackass,
-            Dopeshit,
-            TAsskmunch,
-            TacoBell,
-            Jason,
-            Razhal,
-            Pain,
-            Tickles,
-            KittnLuvr44
-        }
-
-        private enum RandomPrizes {
-            Tickle,
-            Duckie,
-            Fuck,
-            Throw,
-            Yeet
-        }
-        private static async Task Redeemer(string username, string prize)
-        {
-            var f = await isEligible(username, prize);
-            if (f)
-                Print($"[Redeemer]: {username} Redeeming {prize}", 0);
-            else
-                Print($"[Redeemer]: {username} Could not redeem {prize}, no points", 0);
-        }
-        //end test purge
 
         private enum userInputs
         {
@@ -176,6 +134,7 @@ namespace ShimamuraBot
             whisper = 3,
             mute = 3,
             test = 3,
+            cat = 2
         }
 
 
@@ -377,6 +336,15 @@ namespace ShimamuraBot
                     case "say":
                         _ = SendMessage("send_message", new string[] { msg[1], "", "" });
                         break;
+                    case "rage" or "eyes":
+                        _ = Redeemer("adachi91", msg[0], true);
+                        break;
+                    case "tits":
+                        _ = Redeemer("", "tits", true, 10, true);
+                        break;
+                    case "cumdump" or "cum" or "trip":
+                        _ = Redeemer("adachi91", msg[0], true, Convert.ToInt32(msg[1]), true);
+                        break;
                     case "mute":
                         //int msgid;
                         //string[] mutemsg;
@@ -455,6 +423,17 @@ namespace ShimamuraBot
                         Print($"stoplisten - Stops the HTTPServer (use this if the temporary Webserver doesn't shutdown for some reason)", 1);
                         Print($"resetenv - Resets the .env file to all default values (you will have to fill them all out again!)", 1);
                         Print($"exit or quit - Exits the program gracefully", 1);
+                        Print($"say [msg]", 1);
+                        Print($"whisper [usr][msg]", 1);
+
+                        Print($"===== Modules ====", 1);
+
+                        Print($"overunder - not finished", 1);
+                        Print($"rage - vibrate?", 1);
+                        Print($"eyes - smol eyes", 1);
+                        Print($"tits - expose breasts", 1);
+                        Print($"trip - trippy", 1);
+                        Print($"cum  - liquid overhead", 1);
                         break;
                     default:
                         Print("[UserInputInvalid]: type help for list of commands", 1);

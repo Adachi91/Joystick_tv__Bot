@@ -188,8 +188,28 @@ namespace ShimamuraBot
 
         private async Task<bool> onMessage_StreamEvent(string payload) {
             var streamEvent = JsonSerializer.Deserialize<RootStreamEvents>(payload);
-            if (streamEvent.message.metadataObject.tipMenuItem == "Remove Bra") vCat.Redeem("tta");
+            //if (streamEvent.message.metadataObject.tipMenuItem == "Remove Bra") vCat.Redeem("tta");
             if (!string.IsNullOrEmpty(streamEvent.message.metadataObject.tipMenuItem)) Print($"[StreamEvent]: !! tipMenuItem :: {streamEvent.message.metadataObject.tipMenuItem}", 2);
+
+            if(streamEvent.message.type == "Tipped")
+            {
+                var redeem = streamEvent.message.text.ToLower();
+
+                if(redeem.Contains("10 minutes"))
+                    _ = Redeemer("", "tits", true, 600, true);
+
+                if (redeem.Contains("30 minutes"))
+                    _ = Redeemer("", "tits", true, 1800, true);
+
+                if (redeem.Contains("eyes"))
+                    _ = Redeemer("", "eyes", true, 0);
+
+                if (redeem.Contains("dump"))
+                    _ = Redeemer("", "cumdump", true, 10, true);
+
+                if (redeem.Contains("remove bra"))
+                    _ = Redeemer("", "tits", true);
+            }
 
             if (streamEvent.message.metadataObject.what == "followed") { Print($"[Shimamura]: A new follower has appeared! Say hi to {streamEvent.message.metadataObject.who}!", 1); await sendMessage("send_message", new string[] { $"Welcome to the Cherry Blossoms {streamEvent.message.metadataObject.who}. Thanks so much for the Follow !" }); return true; }
             if (streamEvent.message.type == "ViewerCountUpdated") { Console.Title = $"♥ Shimamura :: {streamEvent.message.metadataObject.numberOfViewers.ToString()} ♥"; return true; }
@@ -212,7 +232,8 @@ namespace ShimamuraBot
             if (msg.message.text.Contains(".redeem") && msg.message.author.username == "murphymichael902") vCat.Redeem("tta");
 
             Print($"[Chat]: {msg.message.author.username}: {msg.message.text}", 1);
-            Console.Beep();
+            if(!msg.message.text.StartsWith("."))
+                Console.Beep();
             await WriteToFileShrug("ChatMessage", new string[] { msg.message.createdAt.ToString(), $"{ msg.message.author.username}: {msg.message.text}" });
             if (msg.message.text.StartsWith(".duck")) vCat.Redeem("duck");
             else if (msg.message.text.StartsWith(".yeet")) vCat.Redeem("yeet");
@@ -250,6 +271,7 @@ namespace ShimamuraBot
                 case "StreamEvent":
                     await onMessage_StreamEvent(data);
                     await WriteToFileShrug("StreamEvent", new string[] { DateTime.UtcNow.ToString(), "Raw dump :: ", $"{data}", " ::end" });
+                    //TODO: Fix vNyan communication, it's not spawning an instance of vNyan properly to send Websocket request through, even override of tta did not work.
                     break;
                 case "ChatMessage": //deserialize Root ChatMessage class
                     await onMessage_Message(data);
@@ -472,7 +494,9 @@ namespace ShimamuraBot
             public DateTime createdAt { get; set; }
             public string channelId { get; set; }
 
-            [JsonIgnore]
+            /// <summary>
+            /// [JsonIgnore] WHAT THE FUCK 
+            /// </summary>
             public MetadataObject metadataObject => JsonSerializer.Deserialize<MetadataObject>(metadata);
         }
 
@@ -480,9 +504,12 @@ namespace ShimamuraBot
         {
             public string who { get; set; }
             public string what { get; set; }
+            [JsonPropertyName("how_much")]
             public int? howMuch { get; set; }
+            [JsonPropertyName("tip_menu_item")]
             public string tipMenuItem { get; set; }
             public string prize { get; set; }
+            [JsonPropertyName("number_of_viewers")]
             public int? numberOfViewers { get; set; }
         }
         #endregion

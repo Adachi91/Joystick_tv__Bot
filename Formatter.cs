@@ -28,7 +28,7 @@ namespace ShimamuraBot
         }
 
 
-        private static string[] formatPrint(string txt)
+        private static string[] formatPrint(string txt) //TODO: Run random text strings to make sure it can handle []: tagging like "Hi [where] Are you [rom you there?"
         {
             string[] holder = { "", "" };
             //Yeah I overdo shit
@@ -41,7 +41,6 @@ namespace ShimamuraBot
                 holder[0] = $"[{tag}]";
                 holder[1] = txt.Substring(endIndex + 3).Trim();
             } else {
-                holder[0] = string.Empty;
                 holder[1] = txt;
             }
 

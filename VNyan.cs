@@ -5,6 +5,7 @@ using System.Text;
 using System.Threading.Tasks;
 using System.Net.WebSockets;
 using System.Threading;
+using System.ComponentModel;
 
 namespace ShimamuraBot
 {
@@ -16,8 +17,42 @@ namespace ShimamuraBot
     /// </summary>
     internal class VNyan
     {
-        //private CancellationTokenSource cts = new CancellationTokenSource();
-        //private CancellationToken cancelRequest = new CancellationToken();
+        private CancellationTokenSource cts = new CancellationTokenSource();
+        private CancellationToken cancelRequest;
+
+        private ClientWebSocket _ws_connection_port_socket_unix_reverse_uno;
+
+        /// <summary>
+        /// Dumstructor.
+        /// </summary>
+        public VNyan() {
+            _ws_connection_port_socket_unix_reverse_uno = new ClientWebSocket();
+            cancelRequest = cts.Token;
+        }
+
+        public void Stop() {
+            if (!cts.IsCancellationRequested)
+                cts.Cancel();
+            else
+                Print($"A secondary cancellation request was sent to vNyan.", 2);
+        }
+
+        /// <summary>
+        /// Opens the vNyan websocket connection.
+        /// </summary>
+        /// <param name="Host">Optional - Defaults to vNyan default localhost:8000/vnyan</param>
+        /// <returns>Boolean - Connection Status</returns>
+        public async Task<bool> Start(string Host = "ws://127.0.0.1:8000/vnyan") => await _start(Host);
+
+        private async Task<bool> _start(string Host) {
+            try {
+                await _ws_connection_port_socket_unix_reverse_uno.ConnectAsync(new Uri(Host), cancelRequest);
+                if (_ws_connection_port_socket_unix_reverse_uno.State == WebSocketState.Open) return true; else return false;
+            } catch (Exception ex) {
+                Print($"[vNyan]: Could not open a websocket connection. {ex}", 3);
+                return false;
+            }
+        }
 
         public void Redeem(string type) { //TODO: add a check to make sure ws connectivity is available for vNyan otherwise return a user friendly message
             switch(type) {
@@ -34,12 +69,9 @@ namespace ShimamuraBot
                     SendTovNyan("tta");
                     break;
                 default:
+                    SendTovNyan(type);
                     break;
             }
-        }
-        public void stopvNyan()
-        {
-            //cts.Cancel();
         }
 
         private async void SendTovNyan(string msg)
@@ -93,7 +125,7 @@ namespace ShimamuraBot
                     Print($"[vNyan]: {ex}", 3);
                 }
 
-                Print($"[vNyan]: Disposing Websocket Client.", 0);
+                //Print($"[vNyan]: Disposing Websocket Client.", 0);
             }
         }
     }

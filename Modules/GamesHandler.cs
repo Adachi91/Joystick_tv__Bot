@@ -31,6 +31,39 @@ namespace ShimamuraBot.Modules
 
 
         /// <summary>
+        ///  Sample redeemer to interface with vNyan while I create a more robust one that will interface with 3rd-party apps / native redeems
+        /// </summary>
+        /// <param name="username">String - username</param>
+        /// <param name="rTxt">String - Redeemable</param>
+        /// <param name="tipped">Bool - True if they tipped otherwise false (Bypass eligible check)</param>
+        /// <param name="time">int - How long in SECONDS to perform action if applicable</param>
+        /// <param name="toggle">Bool - Is Toggable? Need to send end message on callback</param>
+        /// <returns>Philly Cheesestake Pizza?</returns>
+        public static async Task Redeemer(string username, string rTxt, bool tipped = false, int time = 0, bool toggle = false)
+        {
+            bool _eligible = true;
+            VNyan nyan = new VNyan(); // ref
+
+            if (!tipped)
+                _eligible = await isEligible(username, rTxt);
+
+            if(time > 0) {
+                await Task.Run(async () => {
+                    nyan.Redeem(rTxt);
+                    await Task.Delay(time * 1_000);
+
+                    if (toggle) {
+                        if (rTxt.ToLower().Contains("tits")) { rTxt = "notits"; }
+                        nyan.Redeem(rTxt); } //toggle again to turn off then done.
+                });
+            } else {
+                if (_eligible)
+                    nyan.Redeem(rTxt);
+            }
+            nyan = null; //gcc GOOOOOOOOOOOOOOOOO idk nullify it so gc will f!@# it like a lost&found (used) pocket toy
+        }
+
+        /// <summary>
         ///  Gets the current list of rewards the user has and whispers it back to them.
         /// </summary>
         /// <param name="username">Required - username</param>
@@ -48,7 +81,7 @@ namespace ShimamuraBot.Modules
         /// <param name="username">User</param>
         /// <param name="reward">Redeem Name</param>
         /// <returns>Bool - True if eligible, Otherwise False</returns>
-        public static async Task<bool> isEligible(string username, string reward) =>
+        private static async Task<bool> isEligible(string username, string reward) =>
             await CheckRewards(username, reward);
 
         
@@ -82,8 +115,8 @@ namespace ShimamuraBot.Modules
                 if (!File.Exists("rewards.json"))
                     await File.WriteAllTextAsync("rewards.json", "[]");
 
-                var rewardFileLines = await File.ReadAllTextAsync("rewards.json");
-                var rewardList = JsonSerializer.Deserialize<List<Winner>>(rewardFileLines) ?? new List<Winner>();
+                string rewardFileLines = await File.ReadAllTextAsync("rewards.json");
+                List<Winner> rewardList = JsonSerializer.Deserialize<List<Winner>>(rewardFileLines) ?? new List<Winner>();
 
                 var winner = rewardList.FirstOrDefault(w => w.Username == username);
                 if (winner == null && amount == 0) //usernot found, and it's not an eligibility check
