@@ -17,7 +17,7 @@ namespace ShimamuraBot
         ///  Write to log file
         /// </summary>
         /// <param name="type">The event Type from WSSClient</param>
-        /// <param name="args">string[DateTime, string, string]</param>
+        /// <param name="args">string[DateTime, string*]</param>
         /// <returns></returns>
         public static async Task WriteToFileShrug(string type, params string[] args) { //passed - Optimize
             if (args == null || args.Length == 0)

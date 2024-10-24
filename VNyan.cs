@@ -11,9 +11,7 @@ namespace ShimamuraBot
 {
     /// <summary>
     /// VNyan Websocket Extension to allow chat to tip to interact with VNyan (e.g. Throw items, Bonk, Change Pose, etc... of the VTuber)
-    /// endpoint:: wss://localhost:8000/vnyan
-    /// 
-    /// SOME FUCKING DOCUMENTATION WOULD BE GREAT, THANKS.
+    /// endpoint:: ws://localhost:8000/vnyan
     /// </summary>
     internal class VNyan
     {
@@ -31,7 +29,7 @@ namespace ShimamuraBot
         }
 
         public void Stop() {
-            if (!cts.IsCancellationRequested)
+            if (!cts.IsCancellationRequested || !cts.Token.CanBeCanceled || !cts.Token.IsCancellationRequested)
                 cts.Cancel();
             else
                 Print($"A secondary cancellation request was sent to vNyan.", 2);
@@ -78,14 +76,6 @@ namespace ShimamuraBot
         {
             using(ClientWebSocket vNyan = new ClientWebSocket())
             {
-                //vNyan.Options.AddSubProtocol("wss");
-
-                //This must be the wrong struct and it's just responding by throwing at a duck at me to tell me to bugfix. I wonder if it's returning anything
-                //var payload = new
-                //{ // so I have no idea the structure apparently.
-                //title = msg,
-                //Data = msg
-                //};
                 //holy.
                 //fucking.
                 //shit.
@@ -113,7 +103,6 @@ namespace ShimamuraBot
                  *                              https://discord.com/channels/714814460010823690/1041200204742934578/1041261257078079578
                  */
 
-                //string jsonPayload = JsonSerializer.Serialize(payload);
                 byte[] buffer = Encoding.UTF8.GetBytes(msg);
                 Print($"[vNyan]: Attempting to send {msg} to vNyan", 0);
 

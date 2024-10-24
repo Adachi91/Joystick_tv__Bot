@@ -18,6 +18,8 @@ namespace ShimamuraBot
         public static void load() {
             string tmp = null; //hold the long in a string for this type of switch to work.
             string _logging = null;
+            string _vnyan_hook = null;
+            string _configPth = null;
 
             foreach (var line in File.ReadAllLines(ENVIRONMENT_PATH)) {
                 if (line.StartsWith("#")) continue;
@@ -36,9 +38,12 @@ namespace ShimamuraBot
                     "JWT" => APP_JWT = split[1],
                     "JWT_REFRESH" => APP_JWT_REFRESH = split[1],
                     "JWT_EXPIRE" => tmp = split[1], //TODO extract from JWT and delete this entry.
-                    "LOGGING" => _logging = split[1],
                     "CHANNELGUID" => CHANNELGUID = split[1],
+                    
+                    "LOGGING" => _logging = split[1],
                     "DISCORDHOOK" => DISCORD_URI = split[1],
+                    "CONFIG" => _configPth = split[1],
+                    "VNYAN" => _vnyan_hook = split[1], 
                     _ => throw new BotException("Environment", $"The Enviroment Keys in are not structured properly in the .env file{Environment.NewLine}The minimum is required{Environment.NewLine}HOST=HOST_URL{Environment.NewLine}CLIENT_ID=YOUR_CLIENT_ID{Environment.NewLine}CLIENT_SECRET=YOUR_CLIENT_SECRET{Environment.NewLine}WSS_HOST=THE_WSS_ENDPOINT{Environment.NewLine}")
                 };
             }
@@ -47,9 +52,19 @@ namespace ShimamuraBot
 
             ACCESS_TOKEN = Convert.ToBase64String(Encoding.UTF8.GetBytes($"{CLIENT_ID}:{CLIENT_SECRET}"));
             WSS_GATEWAY = $"{WSS_HOST}?token={ACCESS_TOKEN}"; //not anymore :) //this needs to be set where JWT is handled.
-            if (!string.IsNullOrEmpty(tmp)) APP_JWT_EXPIRY = Convert.ToInt64(tmp);
-            if(!string.IsNullOrEmpty(_logging)) LOGGING_ENABLED = Convert.ToBoolean(_logging);
+            if (!string.IsNullOrEmpty(tmp)) try { APP_JWT_EXPIRY = Convert.ToInt64(tmp); } catch { /* write out APP_JWT_EXPIRY */ new BotException("Environment-Loader", "Unable to convert APP_JWT_EXPIRY to long."); }
+            if (!string.IsNullOrEmpty(_logging)) try { LOGGING_ENABLED = Convert.ToBoolean(_logging); } catch { LOGGING_ENABLED = false; new BotException("Environment-Loader", "LOGGING Variable is not a valid value. Defaulting to False. (Valid opt: True, False)"); }
+            if (!string.IsNullOrEmpty(_vnyan_hook) && Convert.ToBoolean(_vnyan_hook) == true) vNyan = new VNyan();
+
+            //unloading all the config from environment file and storing it in a seperate config.json
+            if (!string.IsNullOrEmpty(_configPth)) { if (File.Exists(_configPth)) load_config(_configPth); else new BotException("Enviroment-Config-Loader", $"Could not find the directory {_configPth}. Please make sure the file exists here."); }
         }
+
+        private static void load_config(string fp) {
+            // TODO make a config struct
+            // deserialize config
+        }
+
 
         /// <summary>
         ///  Writes Token information to the environment file

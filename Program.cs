@@ -9,6 +9,7 @@ using System.Linq;
 using System.Text;
 using System.Timers;
 using static System.Runtime.InteropServices.JavaScript.JSType;
+using ShimamuraBot.Classes;
 
 namespace ShimamuraBot
 {
@@ -37,7 +38,11 @@ namespace ShimamuraBot
         public static bool LOGGING_ENABLED = false;
 
         //Modules - Only loading global most likely used.
-        public static string NOV_M = string.Empty;
+        /*
+         * Buffer -> input=modules -> Pause Main Buffer -> Enter Module While() {} for configuring modules is what I think this was for.
+         * TODO: Figure out a better way to configure modules & settings .json without stopping Main. - Though I don't think there is an easy solution, I don't think exec will work across all platforms, and without loading a large ass library to handle a GUI
+         */
+        public static string NOV_M = string.Empty; // No fucking idea what this means, delete it if you don't see a possible reference when auditing
         public static bool MODULE_CONFIGURATION = false; //will be used to pause buffer output while configuring modules, should I just make a GUI in VB to track their IP address? (I WILL BRING BACK DEAD MEMES)
         public static string DISCORD_URI = null;
 
@@ -149,7 +154,12 @@ namespace ShimamuraBot
         }
 
 
-        private static string[] user_InputParser(string input)
+        /// <summary>
+        ///  Construct a string[] with a set length based on the command issued by userinput.
+        /// </summary>
+        /// <param name="input">Console.ReadLine()</param>
+        /// <returns>string[] - command, params</returns>
+        private static string[] user_InputParser(string input) // this is a mess redo it
         {
             string[] strings = null;
 
@@ -216,8 +226,8 @@ namespace ShimamuraBot
                 }
             }
 
-            try { envManager.load(); wss.updateshit(); }
-            catch (BotException) { } catch (Exception ex) {
+            try { envManager.load(); wss.GetChannelUUID(); }
+            catch (BotException) { } catch (Exception ex) { // <------------------------- WHAT?
                 Print($"[Environment]: {ex}", 3);
             }
 
@@ -237,7 +247,7 @@ namespace ShimamuraBot
             TimingBelt.Elapsed += TimerTimy;
 
             if (!MainLoop.Running()) MainLoop.Run();
-            Console.Clear();
+            //Console.Clear();
             #region Welcome ASCII garbage
             Console.ForegroundColor = ConsoleColor.Cyan;
             string headerBorder = new string('=', Console.WindowWidth);
@@ -267,51 +277,14 @@ namespace ShimamuraBot
 
             while (true) {
                 string input = Console.ReadLine();
-                /*var msg = "";
-                var user = "";
-                if(input.StartsWith("etest")) {
-                    var tmp = input.Split(" ", 2, StringSplitOptions.RemoveEmptyEntries);
-                    input = tmp[0];
-                    msg = tmp[1];
-                }
-
-                string[] tits;
-                if (input.ToLower().StartsWith("say"))
-                {
-                    tits = input.Split(" ", 2, StringSplitOptions.RemoveEmptyEntries);
-                    input = tits[0];
-                    msg = tits[1];
-                }
-                else if (input.ToLower().StartsWith("whisper"))
-                {
-                    tits = input.Split(" ", 3, StringSplitOptions.RemoveEmptyEntries);
-                    input = tits[0];
-                    user = tits[1];
-                    msg = tits[2];
-                }*/
                 string[] msg = user_InputParser(input);
-                /*else
-                {
-                    tits = input.Split(" ", StringSplitOptions.RemoveEmptyEntries);
-                    input = tits[0];
-
-                    string[] tmptits = new string[tits.Length - 1];
-
-                    for (int i = 0; i < tits.Length; i++)
-                    {
-                        if (i == 0)
-                            continue;
-                        else
-                            tmptits[i - 1] = tits[i];
-                    }
-                    tits = tmptits;
-                }*/
 
                 switch (msg[0].ToLower()) {
                     case "":
                         Print("", 0);
                         break;
                     case "test":
+                        if (Connectivity.Ping()) Print("Hello world", 0);
                         /*for(int i = 0; i < 20; i++)
                         {
                             var player = Enum.GetNames(typeof(RandomNames))[new Random().Next(Enum.GetNames(typeof(RandomNames)).Length)];
@@ -386,12 +359,6 @@ namespace ShimamuraBot
                             }
                         } else
                             Print($"[Shimamura]: Bot is not currently active!", 2);
-                        break;
-                    case "listen"://PRUNE AFTER FLOW HAS BEEN COMPLETE.
-                        //_ = tempWebserver.Start();
-                        break;
-                    case "stoplisten"://PRUNE  AFTER FLOW HAS BEEN COMPLETE.
-                        //tempWebserver.Stop();
                         break;
                     case "exp":
                         if (OAuthClient.checkJWT())

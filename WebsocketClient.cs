@@ -7,6 +7,8 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Text.Json.Nodes;
 using System.Collections.Generic;
+using System.Globalization;
+using ShimamuraBot.Classes;
 
 namespace ShimamuraBot
 {
@@ -39,8 +41,8 @@ namespace ShimamuraBot
         private bool _connected { get; set; } = false;
         private bool _closing { get; set; } = false;
         private bool _faulted { get; set; } = false;
-        private bool _userhalted { get; set; } = false;
-        private long _runtime { get; set; } = 0;//this was wrote with the intention of resetting the connection after say several days to clear memory usage, as this class consumes 90% of the programs resources
+        private bool _userfault { get; set; } = false;
+        //private long _runtime { get; set; } = 0;//this was wrote with the intention of resetting the connection after say several days to clear memory usage, as this class consumes 90% of the programs resources
         private int _reconnections { get; set; } = 0;
         private long _TTLR { get; set; } = 0; //Time To Last Reconnect
         private long _lastping { get; set; } = 0;
@@ -68,9 +70,10 @@ namespace ShimamuraBot
                 channelId = CHANNELGUID;*/
         }
 
-        public void updateshit() {
-            if (!string.IsNullOrEmpty(CHANNELGUID)) channelId = CHANNELGUID;
-        }
+        /// <summary>
+        ///  Attempt to retrieve streamers channel UUID from env (cached) and store it globally.
+        /// </summary>
+        public void GetChannelUUID() => channelId = CHANNELGUID ?? string.Empty;
 
 
         /// <summary>
@@ -78,9 +81,10 @@ namespace ShimamuraBot
         /// </summary>
         /// <returns></returns>
         public async Task Connect() {
-            if (_connected) { Print($"[Websocket]: Socket already in use", 2); return; }
-            //if(_faulted) { Print($"[Websocket]: Attempting to reconnect to {WSS_HOST}", 1); _faulted = false; }
-            if (socket != null) { socket.Dispose(); }
+            if (_connected) { Print($"[Websocket]: Socket already in use.", 2); return; } // return if already connected.
+            if (!Connectivity.Ping()) { Print($"[Websocket]: Unable to detect internet connectivity.", 3); return; } // return if unable to reach outside.
+
+            if (socket != null) { socket.Dispose(); } // Socket re-use if `Stop()` and `Starting()`
 
             socket = new ClientWebSocket();
             socket.Options.AddSubProtocol("actioncable-v1-json");
@@ -94,19 +98,36 @@ namespace ShimamuraBot
         }
 
 
+        private async Task<bool> Preconnection() { // test on connect/recoonect try {} catch(boteccetpion)SADF Words what do they mean? I don't care.
+
+            if(_connected || socket.State == WebSocketState.Open)
+                throw new BotException("WSS-Client", "Socket is already in use.");
+
+            if(!Connectivity.Ping())
+                throw new BotException("WSS-Client", "Could not find internet connectivity.");
+
+            if(socket.State == WebSocketState.Connecting || socket.State == WebSocketState.CloseReceived || socket.State == WebSocketState.CloseSent || socket.State == WebSocketState.Aborted)
+                throw new BotException("WSS-Client", $"Invalid socket state of {socket.State}");
+            
+
+            return false;
+        }
+
+
         /// <summary>
         ///  Prevent mass flood of Connect attempts by slowing down the flow each error.
         /// </summary>
         /// <returns></returns>
         private async Task Reconnect() {
+            if (!Connectivity.Ping()) _userfault = true;
             if (!_faulted) return;
 
             Print($"[Websocket]: Socket faulted. Attempting to re-establish connection with {WSS_HOST}. n({_reconnections})", 1);
 
-            if (GetUnixTimestamp() - _TTLR > 300) { _TTLR = GetUnixTimestamp(); _reconnections = 0; } //reset "Time To Last Reconnect" and attempts after 5 minutes
+            if (GetUnixTimestamp() - _TTLR > 300 || _TTLR == 0) { _TTLR = GetUnixTimestamp(); _reconnections = 0; } //reset "Time To Last Reconnect" and attempts after 5 minutes
 
-            await Task.Delay((1500 * _reconnections)); //instant, 1, 2, 3, 4 ,5 seconds
             if (_reconnections < 20) _reconnections++;
+            await Task.Delay((1_000 * _reconnections)); //1, 2, 3, 4, 5 seconds
 
             _ = Connect();
         }
@@ -162,12 +183,10 @@ namespace ShimamuraBot
         ///  Returns the socket status
         /// </summary>
         /// <returns>Bool - True if connected and not closing, Otherwise False</returns>
-        public bool Open() {
-            return (_connected && !_closing);
-        }
+        public bool Open() => (_connected && !_closing);
 
 
-        public string[] getMessage(int id)
+        public string[] getMessage(int id) // I think this for FAIL2BAN, err I mean banning/deleting.
         {
             string[] kvipairs = new string[] { "", "" };
             try
@@ -250,6 +269,7 @@ namespace ShimamuraBot
 
         private async Task onMessage(string data) {
             if (data.StartsWith("{\"type\":\"ping\"")) return;
+            await WriteToFileShrug("Raw (Look for ChannelID):: ", new string[] { DateTime.UtcNow.ToString("o", CultureInfo.InvariantCulture), data });
 
             if (data.Contains("confirm_subscription")) {
                 Print($"[Shimamura]: Connected to chat!", 1);
@@ -597,6 +617,20 @@ namespace ShimamuraBot
 
             [JsonPropertyName("isSubscriber")]
             public bool isSubscriber { get; set; }
+        }
+        #endregion
+
+        #region StreamSettings_RestAPI
+        public class StreamSettings
+        {
+            public string username { get; set; }
+            public string stream_title { get; set; }
+            public string chat_welcome_message { get; set; }
+            public List<string> banned_chat_words { get; set; }
+            public bool device_active { get; set; }
+            public string photo_url { get; set; }
+            public bool live { get; set; }
+            public int number_of_followers { get; set; }
         }
         #endregion
 
