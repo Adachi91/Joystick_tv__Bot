@@ -10,9 +10,13 @@ using System.Threading.Tasks;
 
 namespace ShimamuraBot
 {
+    /// <summary>
+    ///  Authorization class - Needs to be fired if there is no valid token
+    /// </summary>
     internal class HTTPServer
     {
         private readonly HttpListener listener;
+        private int port { get; set; }
         private OAuthClient _OAuthPtr;
 
         private CancellationTokenSource cts;
@@ -22,9 +26,9 @@ namespace ShimamuraBot
         ///  Constrcuts a new HTTPListener client
         /// </summary>
         /// <param name="OAuthPtr">Constructed OAuth class pointer</param>
-        public HTTPServer(OAuthClient OAuthPtr) {
+        public HTTPServer(OAuthClient OAuthPtr) {            
             listener = new HttpListener();
-            listener.Prefixes.Add($"http://127.0.0.1:{LoopbackPort}/auth/");
+            listener.Prefixes.Add($"http://127.0.0.1:{LoopbackPort}/auth/"); //let's try and halt you
             _OAuthPtr = OAuthPtr;
 
             Print("[HTTPServer]: Constructed the HTTP Listener", 0);
@@ -36,7 +40,7 @@ namespace ShimamuraBot
         /// </summary>
         /// <returns></returns>
         public async Task<bool> Start() { //passed test
-            if (PortCheck()) {
+            if (PortCheck_()) {
                 cts = new CancellationTokenSource();
                 cancelToken = cts.Token;
 
@@ -52,37 +56,80 @@ namespace ShimamuraBot
 
 
         /// <summary>
-        ///  Force Stop the HTTPListener
+        ///  Force Stop the HTTPListener (Deprecated)
         /// </summary>
-        public void Stop() { //passed test
+        public void Stop() { //passed test - Deprecated
             if (!listener.IsListening) { Print($"[HTTPServer]: Server is not currently running", 2); return; }
             cts.Cancel();
         }
 
+
+        private class PortCheck
+        {
+            public async Task<Int16> PortKnock() {
+                Int16 port = LoopbackPort;
+                Random rnd = new Random((int)GetUnixTimestamp());
+                int iterations = 0;
+
+                Print($"[PortCheck]: Beep! {port}", 0);
+                while (!await _tcp_port_check(port) || iterations++ > 10) {
+                    Print($"[PortCheck]: Boom! {port} :: {iterations}", 0);
+                    port = (short)rnd.Next(1444, Int16.MaxValue);
+                    await Task.Delay(35);
+                }
+
+                return port;
+            }
+
+            
+            /// <summary>
+            ///  Dumbass call back to check port idk, there's probably a paradigm that works better but with my knowledge this is the best I can think of, sorry.
+            /// </summary>
+            /// <param name="port">Int16 - Port Number</param>
+            /// <returns>Boolean - True: Port usable, False: Port not available</returns>
+            /// <exception cref="BotException">All hell broke loose, I honestly can't think of how this will throw outside of network adapter being disconnected maybe?</exception>
+            private async Task<bool> _tcp_port_check(Int16 port) {
+                try {
+                    using (TcpListener portListener = new TcpListener(IPAddress.Loopback, port)) {
+                        portListener.Server.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, true);
+                        portListener.Start();
+                        portListener.Stop();
+                        Print($"[PortCheck]: Port {port} is free", 0); // oi you have some reading to do on networking.
+                        await Task.Delay(15);
+                        return true;
+                    }
+                } catch (SocketException e) {
+                    return false;
+                } catch (Exception e) {
+                    throw new BotException("PortCheck", $"A Critical error occured while trying to listen on port {port} during OAuth flow.\n", e);
+                }
+            }
+        }
 
         /// <summary>
         ///  Attempt to see if port for loopback is in use currently.
         /// </summary>
         /// <returns>(Bool) True:Usable, False:SocketException/In use</returns>
         /// <exception cref="SocketException"></exception>
-        private bool PortCheck() { //passed test
+        private bool PortCheck_() { //passed test
             try {
                 Print($"[HTTPServer]: Checking if port {LoopbackPort} is open", 0);
 
                 using (TcpListener portListener = new TcpListener(IPAddress.Loopback, LoopbackPort)) {
                     portListener.Server.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, true);
-                    portListener.Start();
+                    portListener.Start(); // Will throw 10013 which in all microsofts greatest achievements means blocked and unavailable IS IT THE FIREWALL OR A PROGRAM WHO KNOWS FUCK YOU!!!!!!! -ms
                     portListener.Stop();
                     Print($"[HTTPServer]: Port {LoopbackPort} is free", 0);
                     return true;
                 }
             } catch (SocketException ex) {
-                Print($"[HTTPServer]: SocketException while checking Port({LoopbackPort}): {ex.Message}", 3);
-                return false;
+                new BotException("HTTPServer", $"SocketException while trying to listen on port {LoopbackPort}.");
+                //return false;
             } catch (Exception ex) {
-                Print($"[HTTPServer]: Exception while checking port({LoopbackPort}): {ex.Message}", 3);
-                return false;
+                new BotException("HTTPServer", $"Exception while checking if port {LoopbackPort} was usable.", ex);
+                //return false;
             }
+            return false;
         }
 
 
