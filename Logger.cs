@@ -5,52 +5,42 @@ using System.Text;
 using System.Threading.Tasks;
 using System.IO;
 using System.Threading;
-using System.Diagnostics;//remove before compiling builds only used for debugger
+using System.Diagnostics;
 
 namespace ShimamuraBot
 {
     internal class Logger
     {
+        private static string name = "Logger";
         private static SemaphoreSlim _semaphore = new SemaphoreSlim(1, 1);
 
         /// <summary>
         ///  Write to log file
         /// </summary>
-        /// <param name="type">The event Type from WSSClient</param>
-        /// <param name="args">string[DateTime, string*]</param>
-        /// <returns></returns>
-        public static async Task WriteToFileShrug(string type, params string[] args) { //passed - Optimize
-            if (args == null || args.Length == 0)
-                throw new ArgumentNullException("Arguments are empty. They are required.");
-
-
+        /// <param name="component">The component or event you are logging from</param>
+        /// <param name="args">string[string*] list of grievences you would like to talk about</param>
+        public static async Task Log(string component, params string[] args) { //passed - Optimize
             if(!LOGGING_ENABLED && !Debugger.IsAttached) { return; }
+
+            if (args == null || args.Length == 0)
+                throw new BotException(name, "Arguments are empty. They are required.");
 
             await _semaphore.WaitAsync();
             try {
+                string date = DateTime.Now.ToString("yyyy-MM-ddTHH:mm:ss");
                 StringBuilder sb = new StringBuilder();
-                if (DateTime.TryParse(args[0], out DateTime date))
-                    sb.Append($"{LoggerTime(date)}[{type}] -");
-                else
-                    throw new ArgumentException("The first argument was not a DateTime value.");
 
-                for (int i = 1; i < args.Length; i++)
+                sb.Append($"[{date}] [{component}] -");
+
+                for (int i = 0; i < args.Length; i++)
                     sb.Append($" {args[i]}");
 
                 await File.AppendAllTextAsync(HISTORY_PATH, sb.ToString() + Environment.NewLine);
-            } catch (FormatException) {
-                Print($"[Logger]: Tried to log an entry without a TimeDate value", 3);
+            } catch (FormatException fex) {
+                new BotException(name, "Tried to log an entry without a TimeDate value.", fex);
             } catch (Exception ex) {
-                Print($"[Logger]: {ex}", 3);
+                new BotException(name, "Uncaught Exception.", ex);
             } finally { _semaphore.Release(); }
-        }
-
-
-        private static string LoggerTime(DateTime time) {
-            DateTime dateTime = time;
-            string formattedDate = dateTime.ToString("yyyy-MM-ddTHH:mm:ss");
-
-            return $"[{formattedDate.Substring(2, 8)}][{formattedDate.Substring(11)}] - ";
         }
     }
 }
