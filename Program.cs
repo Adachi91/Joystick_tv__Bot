@@ -8,8 +8,9 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Timers;
-using static System.Runtime.InteropServices.JavaScript.JSType;
+//using static System.Runtime.InteropServices.JavaScript.JSType;
 using ShimamuraBot.Classes;
+using System.Runtime.InteropServices;
 
 namespace ShimamuraBot
 {
@@ -17,34 +18,37 @@ namespace ShimamuraBot
     {
         //if you decode it let me know -adachi
         //public const string EASTER_EGG = "GAJ9MDCDIDEAHDTC9D9DEAADTCEAXCHDLAGDEAPC9DFDXCVCWCHDQAJ9HDTC9D9DEAADTCEASBLAADEAUCCDFDVCXCJDTCBDEAHDCDBDXCVCWCHDQAJ9QCIDHDEABDCDQCCDSCMDEARCPCBDEAGDPCJDTCEAADTCEABDCDKDQAJ9SBLAADEAWCCD9DSCXCBDVCEAIDDDEAPCEA9DXCVCWCHDQAJ9RCWCPCGDXCBDVCEACDIDHDEAHDWCTCEASCPCFDZCBDTCGDGDEAXCBDGDXCSCTCQAJ9RCPCIDGDTCEABDCDQCCDSCMDEARCPCBDEAGDPCJDTCEAADTCSAJ9GA";
-        public static int LoopbackPort = 8087;
+        public static Int16 LoopbackPort = 8087;
         private static WebsocketClient wss = new WebsocketClient();
+        private static string name = "Shimamura";
 
-        public static string HOST = null;
-        public static string CLIENT_ID = null;
-        public static string CLIENT_SECRET = null;
-        public static string WSS_HOST = null;
-        public static string WSS_GATEWAY;
-        public static string ACCESS_TOKEN; // B64 token
-        public static string APP_JWT; //bearer interact outside of message/events
-        public static long APP_JWT_EXPIRY;
-        public static string APP_JWT_REFRESH;
+        public static string HOST = null;           // <=== base host
+        public static string CLIENT_ID = null;      // <=== ApplicationID to form basic auth
+        public static string CLIENT_SECRET = null;  // <=== Client Secret to form basic auth
+        public static string WSS_HOST = null;       // <=== Host
+        public static string WSS_ENDPOINT;          // <=== Websocket Endpoint (WSS_HOST + AUTH_HEADER)
+        public static string CLIENT_AUTH_HEADER;    // <=== B64 Basic Auth
+        public static string ACCESS_TOKEN;          // <=== Web Token
+        public static string REFRESH_TOKEN;         // <=== Refresh Token
+        //public static long APP_JWT_EXPIRY; //remove
         public static string ENVIRONMENT_PATH;
-        public static string CHANNELGUID = null;
+        public static bool DEBUGGING_ENABLED = true;
+        //public static string CHANNELGUID = null;
         public static VNyan vNyan = null;
         public static bool IS_WIN = true; // I'm so sorry *Nix and MacOS users. I simply don't want to include 3rd party libraries outside of .net :| TODO: Figure out ALSA api
 
         public const string HISTORY_PATH = @"shimamura.log";
         public static bool LOGGING_ENABLED = false;
 
+        private static SynchronizationContext mainThreadContext;
+
         //Modules - Only loading global most likely used.
         /*
          * Buffer -> input=modules -> Pause Main Buffer -> Enter Module While() {} for configuring modules is what I think this was for.
          * TODO: Figure out a better way to configure modules & settings .json without stopping Main. - Though I don't think there is an easy solution, I don't think exec will work across all platforms, and without loading a large ass library to handle a GUI
          */
-        public static string NOV_M = string.Empty; // No fucking idea what this means, delete it if you don't see a possible reference when auditing
         public static bool MODULE_CONFIGURATION = false; //will be used to pause buffer output while configuring modules, should I just make a GUI in VB to track their IP address? (I WILL BRING BACK DEAD MEMES)
-        public static string DISCORD_URI = null;
+        public static string DISCORD_URI = null; // I thinks I can implements this now.
 
 
         public static System.Timers.Timer TimingBelt = new System.Timers.Timer(1000); /*TimingBelt = new Timer((cb) => { 
@@ -72,11 +76,11 @@ namespace ShimamuraBot
             public readonly ManualResetEvent ExitEvent = new ManualResetEvent(false);
             public CancellationTokenSource isExiting = new CancellationTokenSource();
             public CancellationToken cancellationToken;
-            private bool Started { get; set; } = false;
-
-            public bool Running() { return Started; }
-            public void Run() { Started = true; }
-            public void Stop() { Started = false; }
+            private bool _running { get; set; } = false;
+            private int _tick { get; set; } = 0;
+            public bool Running() { return _running; }
+            public void Run() { _running = true; _ = Loop(); }
+            public void Stop() { _running = false; }
 
 
             //I'm actually going to refactor this entire section it's going to call to MainLoop.acecssor/method
@@ -89,6 +93,29 @@ namespace ShimamuraBot
                 cancellationToken = isExiting.Token;
                 //MainLoop.Start();
                 //Remember to Thread.join() Jackass. 2024
+            }
+
+            private async Task Loop()
+            {
+                var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+
+                while (_running)
+                {
+                    /*_tick++;
+
+                    if(_tick >= 1_000) {
+                        Console.WriteLine("Hello, This is tick");
+                        _tick = 0;
+                    } */
+
+                    if (stopwatch.ElapsedMilliseconds >= 1000)
+                    {
+                        //Console.WriteLine("Hello, This is tick");
+                        stopwatch.Restart();
+                    }
+
+                    await Task.Delay(1);
+                }
             }
 
             //mainloop shit below this line turn back you don't want to die by reading what's below.
@@ -119,12 +146,12 @@ namespace ShimamuraBot
                 {
                 Console.WriteLine("hi2");
                     var f = HOST;
-                    Print($"MainLoop says hi!", 0);
+                    Print(name, $"MainLoop says hi!", PrintSeverity.Debug);
                     //Logger.appendFile("");
 
                     Thread.Sleep(100);
                 }
-                Print($"Cancellation of MainLoop executed. Terminating loop. Goodbye.", 0);
+                Print(name, $"Cancellation of MainLoop executed. Terminating loop. Goodbye.", PrintSeverity.Debug);
 
             });
         }
@@ -135,11 +162,11 @@ namespace ShimamuraBot
 
         private enum userInputs
         {
-            say = 2,
-            whisper = 3,
-            mute = 3,
-            test = 3,
-            cat = 2
+            say = 2, //say, msg
+            whisper = 3, // whisper, user, msg
+            mute = 3, // No idea why mute was 3 args it should be 2
+            test = 3, // NO idea what I was using this for.
+            cat = 2 //vNyan websocket takes 1 additional arg (websocket payload).
         }
 
 
@@ -159,14 +186,14 @@ namespace ShimamuraBot
         /// </summary>
         /// <param name="input">Console.ReadLine()</param>
         /// <returns>string[] - command, params</returns>
-        private static string[] user_InputParser(string input) // this is a mess redo it
+        private static string[] user_InputParser(string input) // this is a mess redo it <--------------------------------------------------------------------------------------
         {
             string[] strings = null;
 
             int? enumValue = GetEnumValueIfStartsWith(input);
             if (enumValue.HasValue)
             {
-                string[] tmp = new string[enumValue.Value];
+                string[] tmp = new string[enumValue.Value]; // e.g. 2 for say => string[2] => [say, msg] 
                 strings = input.Split(" ", enumValue.Value);
                 if (strings.Length < tmp.Length)
                 {
@@ -192,13 +219,23 @@ namespace ShimamuraBot
             return strings;
         }
 
-        public static async Task SendMessage(string action, params string[] dparams) {
+        // Depre
+        /*public static async Task SaendMessage(string action, params string[] dparams) {
             try {
                 await wss.sendMessage(action, true, dparams);
             } catch (BotException) { } catch(Exception ex) {
                 new BotException("Websocket", "Unhandled exception", ex);
             }
-        }
+        }*/
+
+        /// <summary>
+        ///  The only external connection to send a websocket message, GL HAVE FUN YOU ARE ONLY ABLE TO SEND A MESSAGE BECAUSE OF MY FLOW
+        ///  THE FUCKING ILLEST FLOW
+        /// </summary>
+        /// <param name="action">send_message or die</param>
+        /// <param name="msg">String - TextXTASDF</param>
+        /// <returns></returns>
+        public static Task SendWebSocketMsg(string action, string msg="") => _ = wss.SendMessage(action, msg);
 
         /// <summary>
         ///  Entry point
@@ -210,26 +247,34 @@ namespace ShimamuraBot
         {
             AppDomain.CurrentDomain.ProcessExit += CurrentDomainOnProcessExit;
             Console.CancelKeyPress += ConsoleOnCancelKeyPress;
+            mainThreadContext = SynchronizationContext.Current;
 
 
 
             if (File.Exists(".env")) ENVIRONMENT_PATH = ".env";
             else {
-                Print($"[Environment]: Could not find the environment file, please specify the path below. Default: .env", 2);
+                Print("Environment", $"Could not find the environment file, please specify the path below. Default: .env", PrintSeverity.Warn);
                 while(true) {
                     Console.Write("path>");
                     var path = Console.ReadLine();
 
                     if (path == "exit" || path == "close" || path == "end") Environment.Exit(0);
                     if (File.Exists(path)) { ENVIRONMENT_PATH = path; break; }
-                    else Print($"[Environment]: Could not find the path: {path}. Please make sure the file path is correct.", 3);
+                    else Print("Environment", $"Could not find the path: {path}. Please make sure the file path is correct.", PrintSeverity.Error);
                 }
             }
 
-            try { envManager.load(); wss.GetChannelUUID(); }
-            catch (BotException) { } catch (Exception ex) { // <------------------------- WHAT?
-                Print($"[Environment]: {ex}", 3);
+            try {
+                envManager.load();
+            } catch {
+                // Unrecoverable exception occured (thrown from load) need to exit regardless of BotException or General Exception.
+                Print(name, $"Exiting program.{Environment.NewLine}press any key to close.", PrintSeverity.Normal);
+                Console.ReadKey();
+                return;
             }
+
+            // All Globals have been loaded.
+            _ = JWT.Token(); // Store JSON Web Token Payload values for retrieval from other parts of things doing things and things.
 
             oAuth = new OAuthClient(
                 HOST,
@@ -270,21 +315,57 @@ namespace ShimamuraBot
             ///Print($"[.env]: ID: {CLIENT_ID}", 0);
             ///Print($"[.env]: Secret: {CLIENT_SECRET}", 0);
             ///Print($"[.env]: WSS: {WSS_HOST}", 0);
-            ///Print($"[.env]: Token: {ACCESS_TOKEN}", 0);
+            ///Print($"[.env]: Token: {CLIENT_AUTH_HEADER}", 0);
             ///Print($"[.env]: Gateway: {GATEWAY_IDENTIFIER}", 0);
-            ///Print($"[.env]: Refresh: {APP_JWT_REFRESH}", 0);
-            Print($"[environment]: Successfully loaded environment file.", 1);
+            ///Print($"[.env]: Refresh: {REFRESH_TOKEN}", 0);
+            Print(name, $"Successfully loaded environment file.", PrintSeverity.Normal);
 
             while (true) {
                 string input = Console.ReadLine();
-                string[] msg = user_InputParser(input);
+                string[] msg = input.Split(' ', 2);
+                //string[] msg = user_InputParser(input);
 
                 switch (msg[0].ToLower()) {
-                    case "":
-                        Print("", 0);
+                    case "aa":
+                        _ = Logger.Log("New-Exception-Test", new string[] { });
+                        break;
+                        Print(name, $"2 opt(iat exp) {JWT.GetIssuedTime ?? -1} :: {JWT.GetExpiration ?? -1}", PrintSeverity.Debug);
+                        bool parse = await JWT.Token();
+                        if (parse)
+                        {
+                            int? issued = JWT.GetIssuedTime;
+                            if (issued != null)
+                                issued = (int)issued;
+                            // Everything needed for connection should be held.
+                            Print(name, $"aa2 opt(iat exp) {JWT.GetIssuedTime ?? -1} '{issued}' :: {JWT.GetExpiration}", PrintSeverity.Debug);
+                        }
+                        else
+                        {
+                            Print(name, $"ZERO", PrintSeverity.Error);
+                        }
                         break;
                     case "test":
-                        if (Connectivity.Ping()) Print("Hello world", 0);
+
+                        var Haltor = new HTTPServer(oAuth);
+
+                        var adsf = Haltor.Start();
+                        break;
+
+                        RestAPI neverevereveverveverveer = new RestAPI();
+                        //neverevereveverveverveer.UpdateStreamSettingsAsync("Meow", "Meow, meow [meow]: \\Meow/;}{{}><.!@#$@%$^&*()_", new string[] { "tacos" });
+                        RestAPI.StreamSettings blah = await neverevereveverveverveer.GetStreamSettingsAsync();
+                        //neverevereveverveverveer.Dispose();
+
+                        Print(  "Debug",
+                                $"Username: {blah.username}\n" +
+                                $"Stream Title: {blah.stream_title}\n" +
+                                $"Chat Welcome Message: {blah.chat_welcome_message}\n" +
+                                $"Banned Chat Words: [{string.Join(", ", blah.banned_chat_words)}]\n" +
+                                $"Device Active: {blah.device_active}\n" +
+                                $"Photo URL: {blah.photo_url}\n" +
+                                $"Live: {blah.live}\n" +
+                                $"Number of Followers: {blah.number_of_followers}", PrintSeverity.Debug
+                            );
                         /*for(int i = 0; i < 20; i++)
                         {
                             var player = Enum.GetNames(typeof(RandomNames))[new Random().Next(Enum.GetNames(typeof(RandomNames)).Length)];
@@ -297,17 +378,28 @@ namespace ShimamuraBot
                         break;
                         Modules.DiscordWebhook webhookd = new Modules.DiscordWebhook(DISCORD_URI, "♥ Coding/Cyberpunk ♥", "I'm coding, and then playing Cyberpunk This is a test message n shit \n new line test \r\n linefeed + carriage return test");
                         _ = webhookd.SendDiscordWebHook();
-                        Print($"[System]: Dones {msg[1]}", 0);
+                        Print(name, $"Dones {msg[1]}", PrintSeverity.Debug);
                         break;
                     case "overunder":
                         //start a new game of over/under
                         Modules.OverUnder Game = new Modules.OverUnder("tits");
                         break;
                     case "whisper":
-                        _ = SendMessage("send_whisper", new string[] { msg[2], msg[1], "" });
+                        _ = Task.Run(() => {
+                            string[] _tmp = msg[1].Split(" ", 1);
+                            string user = _tmp[0];
+                            string message = _tmp[1];
+
+                            _ = wss.SendWhisper("send_whisper", message, user);
+                        });
+                        //_ = SendMessage("send_whisper", new string[] { msg[2], msg[1], "" });
                         break;
                     case "say":
-                        _ = SendMessage("send_message", new string[] { msg[1], "", "" });
+                        _ = Task.Run(() => {
+                            _ = wss.SendMessage("send_message", msg[1]);
+                        });
+
+                        //_ = SendMessage("send_message", new string[] { msg[1], "", "" });
                         break;
                     case "rage" or "eyes":
                         _ = Redeemer("adachi91", msg[0], true);
@@ -316,7 +408,9 @@ namespace ShimamuraBot
                         _ = Redeemer("", "tits", true, 10, true);
                         break;
                     case "cumdump" or "cum" or "trip":
-                        _ = Redeemer("adachi91", msg[0], true, Convert.ToInt32(msg[1]), true);
+                        try { // are you fucking happy this is what happens when you find a stranger in the alps. Because you try to convert then forget the arguments.
+                            _ = Redeemer("adachi91", msg[0], true, Convert.ToInt32(msg[1]), true);
+                        } catch (Exception ex) { new BotException("YOU", "Hey dipshit, you forgot how to count.", ex); }
                         break;
                     case "mute":
                         //int msgid;
@@ -333,82 +427,141 @@ namespace ShimamuraBot
                         break;
                     case "exit" or "quit":
                         if (wss.Open())
-                            await wss.Close(-1);
+                            await wss.Close();
                         return;
                     case "start" or "run":
-                        if (OAuthClient.checkJWT()) {
-                            if (!wss.Open())
-                                _ = wss.Connect();
+                        if (JWT.Valid && !JWT.Expired) {
+                            if (DEBUGGING_ENABLED) Print(name, $"User-input 'run' received, attempting to start bot.", PrintSeverity.Debug);
+                            _ = wss.Connect();
+                        } else if(JWT.Valid && JWT.Expired && !string.IsNullOrEmpty(REFRESH_TOKEN)) { // This has the potential to throw.
+                            _ = Task.Run(async () => {
+                                Print(name, $"Token expired {GetUnixTimestamp() -  (JWT.GetExpiration ?? -1)} seconds ago, attempting to refresh.", PrintSeverity.Normal);
+
+                                var err = await oAuth.RefreshToken();
+
+                                if(err) {
+                                    await JWT.Token();
+
+                                    Print(name, $"Token was successfully refreshed. New expiration time: {(JWT.GetExpiration ?? -1) - GetUnixTimestamp()} seconds. ☺ ♥ (^o^  )\\", PrintSeverity.Debug);
+                                    if(JWT.Valid && !JWT.Expired) {
+                                        // Delegate _ = wss.Connect(); back to the main thread
+                                        //mainThreadContext?.Send(_ => wss.Connect().GetAwaiter().GetResult(), null); //GPT read on what is happening.
+                                        Print(name, $"Token was renewed, please type 'run' again to start.", PrintSeverity.Normal);
+                                    }
+                                }
+                            });
                         } else {
                             HTTPServer tempWebserver = new HTTPServer(oAuth); //TODO: make sure it has a proper timeout since it's no longer interactable.
-                            var _oauthComplete = await tempWebserver.Start();
+                            bool _oauthComplete = await tempWebserver.Start(); // THREAD BLOCKER - TODO: Move this to a different thread.
+                            tempWebserver = null;
+
                             if (_oauthComplete) {
-                                tempWebserver = null;//free up for GC
-                                if (!wss.Open())
-                                    _ = wss.Connect();
+                                _ = wss.Connect();
+                            } else {
+                                Print(name, $"Unable to connect", PrintSeverity.Error);
+                                return;
                             }
                         }
                         break;
                     case "stop":
                         if (wss.Open()) {
-                            Print($"[Shimamura]: Stopping bot...", 1);
+                            Print(name, $"Stopping bot...", PrintSeverity.Normal);
                             try {
-                                _ = wss.Close(-1);
+                                _ = wss.Close();
                             } catch (BotException) {} catch (Exception e) {
                                 new BotException("Websocket", "Unhandled exception", e);
                             }
                         } else
-                            Print($"[Shimamura]: Bot is not currently active!", 2);
+                            Print(name, $"The bot is not currently active.", PrintSeverity.Warn);
                         break;
                     case "exp":
-                        if (OAuthClient.checkJWT())
-                            Print($"[Info]: Token expires in {APP_JWT_EXPIRY - GetUnixTimestamp()} seconds", 1);
+                        if (JWT.Valid && !JWT.Expired) //OAuthClient.checkJWT())
+                            Print(name, $"Token expires in {(JWT.GetExpiration ?? -1) - GetUnixTimestamp()} seconds", PrintSeverity.Debug);
                         else
-                            Print($"[Info]: You do not have a token yet, or it is expired.", 1);
+                            Print(name, $"Token is either invalid or expired.", PrintSeverity.Debug);
                         break;
                     case "resetenv":
-                        Print($"[Shimamura]: WARNING This will reset all values in your .env file. Are you sure you wish to proceed? Y/N", 2);
+                        Print(name, $"WARNING This will reset all values in your .env file. Are you sure you wish to proceed? (Y/N)", PrintSeverity.Warn);
                         while(true) {
                             var _confirm = Console.ReadLine().ToLower();
 
-                            if (_confirm == "y" || _confirm == "yes") { write(true); Print($"[Shimamura]: .env has been reset to defaults.", 1); break; }
-                            else if (_confirm == "n" || _confirm == "no") { Print($"[Shimamura]: Cancelled reset.", 1); break; }
+                            if (_confirm == "y" || _confirm == "yes") { write(true); Print(name, $".env has been reset to defaults.", PrintSeverity.Normal); break; }
+                            else if (_confirm == "n" || _confirm == "no") { Print(name, $"Cancelled reset.", PrintSeverity.Normal); break; }
                             else break;
                         }
                         break;
                     case "logging":
                         LOGGING_ENABLED = !LOGGING_ENABLED;
                         updateKey("LOGGING", LOGGING_ENABLED.ToString());
-                        if(LOGGING_ENABLED) Print($"[Logger]: logging is now enabled", 1); else Print($"[Logger]: logging is now disabled", 1);
+                        if(LOGGING_ENABLED) Print(name, $"Logging is now enabled.", PrintSeverity.Normal); else Print(name, $"Logging is now disabled.", PrintSeverity.Normal);
                         break;
                     case "help":
-                        Print($"start - Starts the bot", 1);
-                        Print($"stop - Stops the bot", 1);
-                        Print($"exp - Shows how many seconds are left until your token expires", 1);
-                        Print($"logging - Toggle logging on/off", 1);
-                        Print($"listen - Starts the HTTPServer (deprecate)", 1);
-                        Print($"stoplisten - Stops the HTTPServer (use this if the temporary Webserver doesn't shutdown for some reason)", 1);
-                        Print($"resetenv - Resets the .env file to all default values (you will have to fill them all out again!)", 1);
-                        Print($"exit or quit - Exits the program gracefully", 1);
-                        Print($"say [msg]", 1);
-                        Print($"whisper [usr][msg]", 1);
+                        Print("Help", "Command list", PrintSeverity.Normal);
+                        Print("", $"start - Starts the bot", PrintSeverity.Normal);
+                        Print("", $"stop - Stops the bot", PrintSeverity.Normal);
+                        Print("", $"exp - Shows how many seconds are left until your token expires", PrintSeverity.Normal);
+                        Print("", $"logging - Toggle logging on/off", PrintSeverity.Normal);
+                        Print("", $"resetenv - Resets the .env file to all default values (you will have to fill in the file again).", PrintSeverity.Normal);
+                        Print("", $"exit or quit - Exits the program gracefully", PrintSeverity.Normal);
+                        Print("", $"say - Usage: say <msg>", PrintSeverity.Normal);
+                        Print("", $"whisper - Usage: <Username> <Message>", PrintSeverity.Normal);
 
-                        Print($"===== Modules ====", 1);
+                        Print("", $"===== Modules ====", PrintSeverity.Normal);
 
-                        Print($"overunder - not finished", 1);
-                        Print($"rage - vibrate?", 1);
-                        Print($"eyes - smol eyes", 1);
-                        Print($"tits - expose breasts", 1);
-                        Print($"trip - trippy", 1);
-                        Print($"cum  - liquid overhead", 1);
+                        Print("", $"overunder - not finished", PrintSeverity.Normal);
+                        Print("", $"rage - vibrate?", PrintSeverity.Normal);
+                        Print("", $"eyes - smol eyes", PrintSeverity.Normal);
+                        Print("", $"tits - expose breasts", PrintSeverity.Normal);
+                        Print("", $"trip - trippy", PrintSeverity.Normal);
+                        Print("", $"cum  - liquid overhead", PrintSeverity.Normal);
                         break;
                     default:
-                        Print("[UserInputInvalid]: type help for list of commands", 1);
+                        Print(name, "Invalid command - use help for list of commands", PrintSeverity.Normal);
                         break;
                 }
             }
         }
 
+        // this whole fucking thing is pointless and a waste of time, gj.
+        class UserInputHelper
+        {
+            string _cmd { get; set; }
+            List<string> _input { get; set; }
+            
+            public class Parameters {
+                public string Message { get; set; } // Whisper, Chat Messsage
+                public string Message_ID { get; set; } // Mute, Block
+                public string Username { get; set; } // Whisper, Unmute
+                public string Module { get; set; } // vNyan => redeemer class / ?
+                public string Module_Message { get; set; } // Assuming websocket or something I have no idea
+            }
+
+            public UserInputHelper(string whatevertheusertyped) // as of right now only 1 input takes an additional arg +2
+            {
+                _input = new List<string>(whatevertheusertyped.Split(' ')); //[say ]abcdefg hijklmno pqrstuv wxyz
+                _cmd = _input[0];
+                _input.RemoveAt(0);
+                Parameters Params = new Parameters();
+
+                switch(_cmd) {
+                    case "whisper":
+                        Params.Username = _input[0];
+                        Params.Message = string.Join(" ", _input.GetRange(1, _input.Count - 1));
+                        break;
+                    default:
+
+                        break;
+                }
+
+                //options: either switch it or create invididual methods
+            }
+
+            public void getsendwhisper(List<string> input) {
+                string message = string.Join(" ", input.GetRange(1, input.Count - 1));
+            }
+        }
+
+        //de..precated? I think I shutdown manually but this is a good idea.
         private static async Task<bool> WaitForClosures()
         {//to even start I need to have a pool of resources to check list down to make sure are closed and disposed or at least gracefully closed.
             await Task.Delay(100);

@@ -8,6 +8,7 @@ namespace ShimamuraBot
 {
     public static class envManager
     {
+        private static string name = "Environment-Manager";
         public static Dictionary<string, string> audioModule = new Dictionary<string, string>();
         public static Dictionary<string, string> vtuberModule = new Dictionary<string, string>();
 
@@ -16,46 +17,56 @@ namespace ShimamuraBot
         /// </summary>
         /// <exception cref="Exception"></exception>
         public static void load() {
-            string tmp = null; //hold the long in a string for this type of switch to work.
+            //string tmp = null; //hold the long in a string for this type of switch to work.
             string _logging = null;
             string _vnyan_hook = null;
             string _configPth = null;
+            try
+            {
+                foreach (var line in File.ReadAllLines(ENVIRONMENT_PATH))
+                {
+                    if (line.StartsWith("#")) continue;
+                    var split = line.Split('=', 2, StringSplitOptions.RemoveEmptyEntries);
 
-            foreach (var line in File.ReadAllLines(ENVIRONMENT_PATH)) {
-                if (line.StartsWith("#")) continue;
-                var split = line.Split('=', 2, StringSplitOptions.RemoveEmptyEntries);
+                    if (split.Length != 2) continue;
 
-                if (split.Length != 2) continue;
+                    //Environment.SetEnvironmentVariable(split[0], split[1]);
+                    //I decided not to use Enviroment Variables because it isn't imediately clear via code what the variable names are.
 
-                //Environment.SetEnvironmentVariable(split[0], split[1]);
-                //I decided not to use Enviroment Variables because it isn't imediately clear via code what the variable names are.
+                    var envKey = split[0] switch
+                    {
+                        "HOST" => HOST = split[1],
+                        "CLIENT_ID" => CLIENT_ID = split[1],
+                        "CLIENT_SECRET" => CLIENT_SECRET = split[1],
+                        "WSS_HOST" => WSS_HOST = split[1],
+                        "ACCESS_TOKEN" => ACCESS_TOKEN = split[1],
+                        "REFRESH_TOKEN" => REFRESH_TOKEN = split[1], // remove
+                        //"JWT_EXPIRE" => tmp = split[1], // remove
+                        //"CHANNELGUID" => CHANNELGUID = split[1], // remove
 
-                var envKey = split[0] switch {
-                    "HOST" => HOST = split[1],
-                    "CLIENT_ID" => CLIENT_ID = split[1],
-                    "CLIENT_SECRET" => CLIENT_SECRET = split[1],
-                    "WSS_HOST" => WSS_HOST = split[1],
-                    "JWT" => APP_JWT = split[1],
-                    "JWT_REFRESH" => APP_JWT_REFRESH = split[1],
-                    "JWT_EXPIRE" => tmp = split[1], //TODO extract from JWT and delete this entry.
-                    "CHANNELGUID" => CHANNELGUID = split[1],
-                    
-                    "LOGGING" => _logging = split[1],
-                    "DISCORDHOOK" => DISCORD_URI = split[1],
-                    "CONFIG" => _configPth = split[1],
-                    "VNYAN" => _vnyan_hook = split[1], 
-                    _ => throw new BotException("Environment", $"The Enviroment Keys in are not structured properly in the .env file{Environment.NewLine}The minimum is required{Environment.NewLine}HOST=HOST_URL{Environment.NewLine}CLIENT_ID=YOUR_CLIENT_ID{Environment.NewLine}CLIENT_SECRET=YOUR_CLIENT_SECRET{Environment.NewLine}WSS_HOST=THE_WSS_ENDPOINT{Environment.NewLine}")
-                };
+                        "LOGGING" => _logging = split[1],
+                        "DISCORDHOOK" => DISCORD_URI = split[1],
+                        "CONFIG" => _configPth = split[1],
+                        "VNYAN" => _vnyan_hook = split[1],
+                        _ => null//throw new BotException(name, $"{split[0]} The Enviroment Keys in are not structured properly in the .env file{Environment.NewLine}The minimum is required{Environment.NewLine}HOST=HOST_URL{Environment.NewLine}CLIENT_ID=YOUR_CLIENT_ID{Environment.NewLine}CLIENT_SECRET=YOUR_CLIENT_SECRET{Environment.NewLine}WSS_HOST=THE_WSS_ENDPOINT{Environment.NewLine}")
+                    };
+                }
+            } catch (Exception ex) {
+                throw new BotException(name, $"Unable to read .env file.", ex);
             }
 
-            if (HOST == null || CLIENT_ID == null || CLIENT_SECRET == null || WSS_HOST == null) throw new Exception($"One or more values in the environment file was not found{Environment.NewLine}The minimum is required{Environment.NewLine}HOST=HOST_URL{Environment.NewLine}CLIENT_ID=YOUR_CLIENT_ID{Environment.NewLine}CLIENT_SECRET=YOUR_CLIENT_SECRET{Environment.NewLine}WSS_HOST=THE_WSS_ENDPOINT{Environment.NewLine}");
+            if (HOST == null || CLIENT_ID == null || CLIENT_SECRET == null || WSS_HOST == null)
+                throw new BotException(name, $"One or more values in the environment file was not found{Environment.NewLine}The minimum is required{Environment.NewLine}HOST=HOST_URL{Environment.NewLine}CLIENT_ID=YOUR_CLIENT_ID{Environment.NewLine}CLIENT_SECRET=YOUR_CLIENT_SECRET{Environment.NewLine}WSS_HOST=THE_WSS_ENDPOINT{Environment.NewLine}");
 
-            ACCESS_TOKEN = Convert.ToBase64String(Encoding.UTF8.GetBytes($"{CLIENT_ID}:{CLIENT_SECRET}"));
-            WSS_GATEWAY = $"{WSS_HOST}?token={ACCESS_TOKEN}"; //not anymore :) //this needs to be set where JWT is handled.
-            if (!string.IsNullOrEmpty(tmp)) try { APP_JWT_EXPIRY = Convert.ToInt64(tmp); } catch { /* write out APP_JWT_EXPIRY */ new BotException("Environment-Loader", "Unable to convert APP_JWT_EXPIRY to long."); }
-            if (!string.IsNullOrEmpty(_logging)) try { LOGGING_ENABLED = Convert.ToBoolean(_logging); } catch { LOGGING_ENABLED = false; new BotException("Environment-Loader", "LOGGING Variable is not a valid value. Defaulting to False. (Valid opt: True, False)"); }
-            if (!string.IsNullOrEmpty(_vnyan_hook) && Convert.ToBoolean(_vnyan_hook) == true) vNyan = new VNyan();
+            // I can't really see why this would fail to cast, however it is still casting so try-catch.
+            try { CLIENT_AUTH_HEADER = Convert.ToBase64String(Encoding.UTF8.GetBytes($"{CLIENT_ID}:{CLIENT_SECRET}")); } catch { throw new BotException(name, "Unable to Load/Cast credentials to Base64"); }
+            WSS_ENDPOINT = $"{WSS_HOST}?token={CLIENT_AUTH_HEADER}";
+            //remove
+            //if (!string.IsNullOrEmpty(tmp)) try { APP_JWT_EXPIRY = Convert.ToInt64(tmp); } catch { /* write out APP_JWT_EXPIRY */ new BotException(name, "Unable to convert APP_JWT_EXPIRY to long."); }
+            if (!string.IsNullOrEmpty(_logging)) try { LOGGING_ENABLED = Convert.ToBoolean(_logging); } catch { LOGGING_ENABLED = false; new BotException(name, "LOGGING Variable is not a valid value. Defaulting to False. (Valid opt: True, False)"); }
+            if (!string.IsNullOrEmpty(_vnyan_hook)) try { if(Convert.ToBoolean(_vnyan_hook) == true) vNyan = new VNyan(); } catch { new BotException(name, "Unable to parse boolean of vNyan environment setting."); }
 
+            /// This is a TODO - seperate vital config & personal settings.
             //unloading all the config from environment file and storing it in a seperate config.json
             if (!string.IsNullOrEmpty(_configPth)) { if (File.Exists(_configPth)) load_config(_configPth); else new BotException("Enviroment-Config-Loader", $"Could not find the directory {_configPth}. Please make sure the file exists here."); }
         }
@@ -85,11 +96,11 @@ namespace ShimamuraBot
                 string[] lines = File.ReadAllLines(ENVIRONMENT_PATH);
                 env = lines.Select(line => line.Split('=')).Where(parts => parts.Length == 2).ToDictionary(parts => parts[0], parts => parts[1]);
 
-                env["JWT"] = APP_JWT ?? "";
-                env["JWT_REFRESH"] = APP_JWT_REFRESH ?? "";
-                env["JWT_EXPIRE"] = APP_JWT_EXPIRY.ToString() ?? "";
+                env["ACCESS_TOKEN"] = ACCESS_TOKEN ?? "";
+                env["REFRESH_TOKEN"] = REFRESH_TOKEN ?? ""; // DO NOT REMOVE OR I WILL BREAK YOUR LEGS remove
+                //env["JWT_EXPIRE"] = APP_JWT_EXPIRY.ToString() ?? ""; // remove
                 env["LOGGING"] = LOGGING_ENABLED.ToString();
-                env["CHANNELGUID"] = CHANNELGUID ?? "";
+                //env["CHANNELGUID"] = CHANNELGUID ?? ""; // remove
             }
 
             var values = env.Select(kv => $"{kv.Key}={kv.Value}");
@@ -97,7 +108,7 @@ namespace ShimamuraBot
             File.WriteAllLines(ENVIRONMENT_PATH, values);
         }
 
-
+        // deprec-maybe, I only change logging and 1 other thing, which I don't see the need for it's own method.
         public static void updateKey(string key, string value) {
             List<string> fileLines = File.ReadAllLines(ENVIRONMENT_PATH).ToList();
             bool _updated = false;
@@ -113,7 +124,7 @@ namespace ShimamuraBot
             if(!_updated)
                 fileLines.Add($"{key}={value}");
             File.WriteAllLines(ENVIRONMENT_PATH, fileLines);
-            Print($"[Environment]: {key} was updated", 0);
+            Print(name, $"{key} was updated", PrintSeverity.Debug);
         }
 
 
@@ -125,7 +136,9 @@ namespace ShimamuraBot
             private string application { get; set; }
             private int value { get; set; }
 
-            private object VTS_Hotkey = new {
+            // vNyan should be loaded here as well. - I don't think VseeFace has any API/Websocket support.
+
+            private object VTS_Hotkey = new { // I need to download VTube Studio and figure out it's API to finish this part.
                 apiName = "VTubeStudioPublicAPI",
                 apiVersion = "1.0",
                 requestID = OAuthClient.Generatestate(),
@@ -202,7 +215,7 @@ namespace ShimamuraBot
             if(File.Exists(path)) {
                 
             } else {
-                Print($"[ModuleLoader]: Could not find the file specified", 3);
+                Print("ModuleLoader", $"Could not find the file specified", PrintSeverity.Error);
             }
         }
     }

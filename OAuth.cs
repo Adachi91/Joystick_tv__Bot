@@ -13,6 +13,7 @@ namespace ShimamuraBot
 {
     public class OAuthClient
     {
+        private string name = "OAuth";
         /// <summary>
         /// THIS IS THE ONMLY THING THE CLASS IS BEING USED FOR RIGHT NOW
         /// </summary>
@@ -28,9 +29,9 @@ namespace ShimamuraBot
             get { return _oauthCode; }
             set {
                 _oauthCode = value;
-                if (!string.IsNullOrEmpty(_oauthCode))
-                    if (!checkJWT())
-                        _ = callmewhateverlater(1);
+                _ = Logger.Log("Debug", new string[] { $"OAUTH_DEBUG: '{_oauthCode}'" });
+                if (!string.IsNullOrEmpty(_oauthCode) )
+                    _ = request_token(1);
             }
         }
         private string _oauthCode;
@@ -47,8 +48,9 @@ namespace ShimamuraBot
         /// <param name="_scope">Scope (optional) should be bot</param>
         public OAuthClient(string _host, string _client_id, string _client_secret, string _authorize_uri, string _token_uri, string _redirect_uri, string _scope = "ALLURBASES")
         {
-            if (!_host.ToLower().StartsWith("https://")) {
-                Print($"[OAuth]: Could not construct the OAuth class. The Scheme detected was not HTTPS", 3);
+            //if (!_host.ToLower().StartsWith("https://")) {
+            if (String.Compare(_host, 0, "https://", 0, 8, StringComparison.OrdinalIgnoreCase) != 0) { // Why? Because I find it hilarious.
+                Print(this.name, $"Could not construct the OAuth class. The Scheme detected was not HTTPS", PrintSeverity.Error);
                 return;
             }
 
@@ -67,98 +69,100 @@ namespace ShimamuraBot
         /// <summary>
         /// Generate a nounce "state" for comparison on callback to protect against MiTM attacks, however not required for loopback, still implemented.
         /// </summary>
-        /// <returns></returns>
+        /// <returns>String</returns>
         public static string Generatestate() {
             string chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
             Random rand = new Random();
             return new string(Enumerable.Repeat(chars, 32).Select(s => s[rand.Next(s.Length)]).ToArray());
         }
 
-        /// <summary>
-        ///  Checks to see if you have a valid token
-        /// </summary>
-        /// <returns>returns true if valid, false if not valid or expired</returns>
-        public static bool checkJWT() {
-            if (!string.IsNullOrEmpty(APP_JWT))
-                if (APP_JWT_EXPIRY - GetUnixTimestamp() >= 900)
-                    return true;
-                else
-                    return false;
-            else
-                return false;
-        }
 
         /// <summary>
         /// Send a POST request to the host's gateway to request a JWT using HTTPClient
+        /// Resource use has been authorized by this point.
         /// </summary>
-        /// <param name="type">Type of grant. 1:authorization_code, 2:refresh_token</param>
-        public async Task<bool> callmewhateverlater(int type) {
-            //first let's do a few checks
+        /// <param name="type">Type of request - 1:Request Token, 2:Refresh Token</param>
+        private async Task<bool> request_token(int type) { // Token valid 10 hours.
+            if (JWT.Valid && !JWT.Expired) { Print(this.name, $"Token is valid and not expired.", PrintSeverity.Warn); return false; }
 
-            if (checkJWT()) { Print($"[OAuth]: Already have a valid JWT. Not requesting a new one...", 2); return false; }
+            string endpointParams;
 
-            string grantType = "";
-            if (type == 1) grantType = "authorization_code";
-            else if (type == 2) grantType = "refresh_token";
-            else { Print($"[OAuth]: Invalid grant_type provided. The type must be 1:authorization or 2:refresh", 3); return false; }
-
-            using (HttpClient hc = new HttpClient()) {
-                hc.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Basic", ACCESS_TOKEN);
-                hc.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
-
-                var emptybody = new StringContent("");
-                emptybody.Headers.ContentType = new MediaTypeWithQualityHeaderValue("application/json");
-                emptybody.Headers.Add("X-JOYSTICK-STATE", State);
-
-                HttpResponseMessage resp = await hc.PostAsync(new Uri($"{Token_URI}?redirect_uri=unused&code={OAuthCode}&grant_type={grantType}"), emptybody);
-
-                if (resp.IsSuccessStatusCode) {
-                    Print($"[HTTPClient]: Successfully received response from {HOST}", 0);
-                    string respData = await resp.Content.ReadAsStringAsync();
-
-                    foreach (var header in resp.Headers)
-                        if (header.Key == "X-JOYSTICK-STATE")
-                            if (string.Join(", ", header.Value) != State)
-                                Print($"[HTTPClient]: There was a mismatch in the return state from {HOST}", 3);
-
-                    UpdateValues(respData);
-                    return true;
-                } else {
-                    Print($"[HTTPClient]: Failed to retrieve JWT from {HOST} with HTTP status of {resp.StatusCode}", 3);
+            switch (type) {
+                case 1: endpointParams = $"?redirect_uri=unused&code={OAuthCode}&grant_type=authorization_code";
+                    break;
+                case 2: endpointParams = $"?refresh_token={REFRESH_TOKEN}&grant_type=refresh_token";
+                    break;
+                default: new BotException(this.name, "Invalid token request type.");
                     return false;
+            }
+
+            try {
+                using (HttpClient hc = new HttpClient()) {
+                    hc.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Basic", CLIENT_AUTH_HEADER);
+                    hc.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+
+                    var emptybody = new StringContent("");
+                    emptybody.Headers.ContentType = new MediaTypeWithQualityHeaderValue("application/json");
+                    emptybody.Headers.Add("X-JOYSTICK-STATE", State);
+
+                    HttpResponseMessage resp = await hc.PostAsync(new Uri($"{Token_URI}{endpointParams}"), emptybody);
+
+                    if (resp.IsSuccessStatusCode) {
+                        string respData = await resp.Content.ReadAsStringAsync();
+
+                        foreach (var header in resp.Headers)
+                            if (header.Key == "X-JOYSTICK-STATE" && (string.Join(", ", header.Value) != State))
+                                Print(this.name, $"There was a mismatch in the return state from {HOST}. (Received {string.Join(", ", header.Value)} NOT {State})", PrintSeverity.Error);
+
+                        //UpdateValues(respData); // possible race-condition
+                        if (type == 2) _ = Logger.Log(name, new string[] { $"Received Refresh Payload:", $"{respData}" });
+                        HostAuth _HostAuth = JsonSerializer.Deserialize<HostAuth>(respData);
+
+                        ACCESS_TOKEN = _HostAuth.access_token;
+                        //APP_JWT_EXPIRY = Convert.ToInt64(respData.expires_in);
+                        REFRESH_TOKEN = _HostAuth.refresh_token;
+
+                        Print(this.name, $"Succesfully received authorization from {HOST}.", PrintSeverity.Debug);
+
+                        // Write new Auth Tokens to .env
+                        _ = Task.Run(() => {
+                            envManager.write();
+                        });
+
+                        return true; // Received Auth & Codes from Host.
+                    } else {
+                        Print(name, $"Failed to receive authorization from {HOST}. (HTTP {resp.StatusCode})", PrintSeverity.Error);
+                        return false;
+                    }
                 }
+            } catch (Exception ex) {
+                new BotException(this.name, $"There was an error receiving authorization from {HOST}.", ex);
+                return false;
             }
         }
 
-        private class ResponseDeserialization {
+        private class HostAuth {
             public string access_token { get; set; }
             public long? expires_in { get; set; }
+            public string token_type { get; set; }
             public string refresh_token { get; set; }
         }
 
-        public void UpdateValues(string data) {
+        //deprecated it's stupid it only has a single caller and it should be inside the Task running it not spawning off into fucking a million methods.
+        /*private Task UpdateValues(string data) {
             try {
                 var respData = JsonSerializer.Deserialize<ResponseDeserialization>(data);
-                APP_JWT = respData.access_token;
+                ACCESS_TOKEN = respData.access_token;
                 APP_JWT_EXPIRY = Convert.ToInt64(respData.expires_in);
-                APP_JWT_REFRESH = respData.refresh_token;
+                REFRESH_TOKEN = respData.refresh_token;
 
-                Print($"[JWT Parser]: Succesfully retrieved JWT from {HOST}", 0);
+                Print(this.name, $"Succesfully retrieved authorization from {HOST}", PrintSeverity.Debug);
             } catch (Exception ex) {
-                Print($"[JWT Parser]: There was an error parsing the response from {HOST}\n{ex}\n", 3);
+                new BotException(this.name, $"Error recieving authorization from {HOST}.", ex);
             }
             envManager.write();
-        }
+        }*/
 
-        public void checkTimestamp()
-        {
-            if (string.IsNullOrEmpty(APP_JWT)) return;
-
-            Print($"[Timer]: Attempting to refresh JWT...", 0);
-
-            if(GetUnixTimestamp() - APP_JWT_EXPIRY <= 60) {
-                _ = callmewhateverlater(2);
-            }
-        }
+        public async Task<bool> RefreshToken() => await request_token(2);
     }
 }
