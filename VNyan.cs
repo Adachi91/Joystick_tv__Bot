@@ -15,6 +15,7 @@ namespace ShimamuraBot
     /// </summary>
     internal class VNyan
     {
+        private string name = "vNyan";
         private CancellationTokenSource cts = new CancellationTokenSource();
         private CancellationToken cancelRequest;
 
@@ -28,11 +29,11 @@ namespace ShimamuraBot
             cancelRequest = cts.Token;
         }
 
-        public void Stop() {
+        public void Stop() { //deprecated
             if (!cts.IsCancellationRequested || !cts.Token.CanBeCanceled || !cts.Token.IsCancellationRequested)
                 cts.Cancel();
             else
-                Print($"A secondary cancellation request was sent to vNyan.", 2);
+                Print(this.name, $"A secondary cancellation request was sent to vNyan.", PrintSeverity.Debug);
         }
 
         /// <summary>
@@ -47,7 +48,7 @@ namespace ShimamuraBot
                 await _ws_connection_port_socket_unix_reverse_uno.ConnectAsync(new Uri(Host), cancelRequest);
                 if (_ws_connection_port_socket_unix_reverse_uno.State == WebSocketState.Open) return true; else return false;
             } catch (Exception ex) {
-                Print($"[vNyan]: Could not open a websocket connection. {ex}", 3);
+                new BotException("vNyan", "Could not open a websocket connection.\n", ex);
                 return false;
             }
         }
@@ -104,14 +105,15 @@ namespace ShimamuraBot
                  */
 
                 byte[] buffer = Encoding.UTF8.GetBytes(msg);
-                Print($"[vNyan]: Attempting to send {msg} to vNyan", 0);
+                Print(this.name, $"[vNyan]: Attempting to send {msg} to vNyan", PrintSeverity.Debug);
 
                 try {
                     //Use IPv4 localhost instead of 'localhost' because it will try and route to IPv6 and bounce around causing up to 1 second latency.
                     await vNyan.ConnectAsync(new Uri("ws://127.0.0.1:8000/vnyan"), default);
                     _ = vNyan.SendAsync(new ArraySegment<byte>(buffer), WebSocketMessageType.Text, true, default);
                 } catch (Exception ex) {
-                    Print($"[vNyan]: {ex}", 3);
+                    new BotException(this.name, $"{ex}");
+                    //Print(this.name, $"[vNyan]: {ex}", PrintSeverity.Error);
                 }
 
                 //Print($"[vNyan]: Disposing Websocket Client.", 0);

@@ -37,7 +37,7 @@ namespace ShimamuraBot.Modules
             try {
                 using (var client = new HttpClient()) { //reuse grab info from Joystick.tv construct discord embed, and reuse httpClient and send webhook.
                     #region Joystick.TV.GetStreamSettings
-                    client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", APP_JWT);
+                    client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", ACCESS_TOKEN);
                     client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
                     var response = await client.GetAsync("https://joystick.tv/api/users/stream-settings");
 

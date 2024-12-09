@@ -11,6 +11,7 @@ namespace ShimamuraBot
         private static string name = "Environment-Manager";
         public static Dictionary<string, string> audioModule = new Dictionary<string, string>();
         public static Dictionary<string, string> vtuberModule = new Dictionary<string, string>();
+        private static SemaphoreSlim _writer = new SemaphoreSlim(1,1);
 
         /// <summary>
         ///  Loads the environment file
@@ -25,13 +26,10 @@ namespace ShimamuraBot
             {
                 foreach (var line in File.ReadAllLines(ENVIRONMENT_PATH))
                 {
-                    if (line.StartsWith("#")) continue;
+                    if (line.StartsWith("#") || line.StartsWith("//") || line.StartsWith("--") || string.IsNullOrEmpty(line)) continue;
                     var split = line.Split('=', 2, StringSplitOptions.RemoveEmptyEntries);
 
                     if (split.Length != 2) continue;
-
-                    //Environment.SetEnvironmentVariable(split[0], split[1]);
-                    //I decided not to use Enviroment Variables because it isn't imediately clear via code what the variable names are.
 
                     var envKey = split[0] switch
                     {
@@ -40,9 +38,7 @@ namespace ShimamuraBot
                         "CLIENT_SECRET" => CLIENT_SECRET = split[1],
                         "WSS_HOST" => WSS_HOST = split[1],
                         "ACCESS_TOKEN" => ACCESS_TOKEN = split[1],
-                        "REFRESH_TOKEN" => REFRESH_TOKEN = split[1], // remove
-                        //"JWT_EXPIRE" => tmp = split[1], // remove
-                        //"CHANNELGUID" => CHANNELGUID = split[1], // remove
+                        "REFRESH_TOKEN" => REFRESH_TOKEN = split[1],
 
                         "LOGGING" => _logging = split[1],
                         "DISCORDHOOK" => DISCORD_URI = split[1],
@@ -55,14 +51,9 @@ namespace ShimamuraBot
                 throw new BotException(name, $"Unable to read .env file.", ex);
             }
 
-            if (HOST == null || CLIENT_ID == null || CLIENT_SECRET == null || WSS_HOST == null)
+            if (string.IsNullOrEmpty(HOST) || string.IsNullOrEmpty(CLIENT_ID) || string.IsNullOrEmpty(CLIENT_SECRET) || string.IsNullOrEmpty(WSS_HOST))
                 throw new BotException(name, $"One or more values in the environment file was not found{Environment.NewLine}The minimum is required{Environment.NewLine}HOST=HOST_URL{Environment.NewLine}CLIENT_ID=YOUR_CLIENT_ID{Environment.NewLine}CLIENT_SECRET=YOUR_CLIENT_SECRET{Environment.NewLine}WSS_HOST=THE_WSS_ENDPOINT{Environment.NewLine}");
 
-            // I can't really see why this would fail to cast, however it is still casting so try-catch.
-            try { CLIENT_AUTH_HEADER = Convert.ToBase64String(Encoding.UTF8.GetBytes($"{CLIENT_ID}:{CLIENT_SECRET}")); } catch { throw new BotException(name, "Unable to Load/Cast credentials to Base64"); }
-            WSS_ENDPOINT = $"{WSS_HOST}?token={CLIENT_AUTH_HEADER}";
-            //remove
-            //if (!string.IsNullOrEmpty(tmp)) try { APP_JWT_EXPIRY = Convert.ToInt64(tmp); } catch { /* write out APP_JWT_EXPIRY */ new BotException(name, "Unable to convert APP_JWT_EXPIRY to long."); }
             if (!string.IsNullOrEmpty(_logging)) try { LOGGING_ENABLED = Convert.ToBoolean(_logging); } catch { LOGGING_ENABLED = false; new BotException(name, "LOGGING Variable is not a valid value. Defaulting to False. (Valid opt: True, False)"); }
             if (!string.IsNullOrEmpty(_vnyan_hook)) try { if(Convert.ToBoolean(_vnyan_hook) == true) vNyan = new VNyan(); } catch { new BotException(name, "Unable to parse boolean of vNyan environment setting."); }
 
@@ -81,50 +72,36 @@ namespace ShimamuraBot
         ///  Writes Token information to the environment file
         /// </summary>
         /// <param name="_defaults">(Optional)Boolean - Reset the .env file</param>
-        public static void write(bool _defaults = false)
-        {
+        public static async void FlushToDisk(bool _defaults = false) { // Create a test to delete ACCESS_TOKEN, then call THIS
             Dictionary<string, string> env;
+            await _writer.WaitAsync();
 
-            if(_defaults) {
-                env = new Dictionary<string, string> {
-                    ["HOST"] = "https://example.net",
-                    ["CLIENT_ID"] = "YOUR_CLIENT_ID",
-                    ["CLIENT_SECRET"] = "YOUR_CLIENT_SECRET",
-                    ["WSS_HOST"] = "WSS_ENDPOINT",
-                };
-            } else {
-                string[] lines = File.ReadAllLines(ENVIRONMENT_PATH);
-                env = lines.Select(line => line.Split('=')).Where(parts => parts.Length == 2).ToDictionary(parts => parts[0], parts => parts[1]);
+            try {
+                if (_defaults) {
+                    env = new Dictionary<string, string> {
+                        ["HOST"] = "https://example.net",
+                        ["CLIENT_ID"] = "YOUR_CLIENT_ID",
+                        ["CLIENT_SECRET"] = "YOUR_CLIENT_SECRET",
+                        ["WSS_HOST"] = "WSS_ENDPOINT",
+                        ["LOGGING"] = "False"
+                    };
+                } else {
+                    string[] lines = File.ReadAllLines(ENVIRONMENT_PATH);
+                    env = lines.Select(line => line.Split('=')).Where(parts => parts.Length == 2).ToDictionary(parts => parts[0], parts => parts[1]);
 
-                env["ACCESS_TOKEN"] = ACCESS_TOKEN ?? "";
-                env["REFRESH_TOKEN"] = REFRESH_TOKEN ?? ""; // DO NOT REMOVE OR I WILL BREAK YOUR LEGS remove
-                //env["JWT_EXPIRE"] = APP_JWT_EXPIRY.ToString() ?? ""; // remove
-                env["LOGGING"] = LOGGING_ENABLED.ToString();
-                //env["CHANNELGUID"] = CHANNELGUID ?? ""; // remove
-            }
-
-            var values = env.Select(kv => $"{kv.Key}={kv.Value}");
-
-            File.WriteAllLines(ENVIRONMENT_PATH, values);
-        }
-
-        // deprec-maybe, I only change logging and 1 other thing, which I don't see the need for it's own method.
-        public static void updateKey(string key, string value) {
-            List<string> fileLines = File.ReadAllLines(ENVIRONMENT_PATH).ToList();
-            bool _updated = false;
-
-            for(int i = 0; i < fileLines.Count; i++) {
-                if (fileLines[i].StartsWith($"{key}=")) {
-                    fileLines[i] = $"{key}={value}";
-                    _updated = true;
-                    break;
+                    env["ACCESS_TOKEN"] = ACCESS_TOKEN ?? "";
+                    env["REFRESH_TOKEN"] = REFRESH_TOKEN ?? ""; // DO NOT REMOVE OR I WILL BREAK YOUR LEGS
+                    env["LOGGING"] = LOGGING_ENABLED.ToString() ?? "False";
                 }
-            }
 
-            if(!_updated)
-                fileLines.Add($"{key}={value}");
-            File.WriteAllLines(ENVIRONMENT_PATH, fileLines);
-            Print(name, $"{key} was updated", PrintSeverity.Debug);
+                var values = env.Select(kv => $"{kv.Key}={kv.Value}");
+
+                File.WriteAllLines(ENVIRONMENT_PATH, values);
+            } catch (Exception ex) {
+                new BotException(name, "Unhandled exception.", ex);
+            } finally {
+                _writer.Release();
+            }
         }
 
 
@@ -141,7 +118,7 @@ namespace ShimamuraBot
             private object VTS_Hotkey = new { // I need to download VTube Studio and figure out it's API to finish this part.
                 apiName = "VTubeStudioPublicAPI",
                 apiVersion = "1.0",
-                requestID = OAuthClient.Generatestate(),
+                requestID = "ABC", //OAuthClient.Generatestate(), // Figure it out you are not allowed to use this I will beat you
                 messageType = "HotkeysInCurrentModelRequest",
                 data = new {
                     modelID = "optional",

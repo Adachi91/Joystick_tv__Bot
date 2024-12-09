@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Diagnostics.CodeAnalysis;
 //using System.Collections.Generic;
 //using System.Linq;
 //using System.Text;
@@ -6,6 +7,7 @@
 
 namespace ShimamuraBot
 {
+    // new BotExceptions are GC'd so it's okay to call them as such.
     internal class BotException : Exception
     {
         /// <summary>
@@ -14,7 +16,7 @@ namespace ShimamuraBot
         /// <param name="sender">Oriigns</param>
         /// <param name="msg">Message</param>
         public BotException(string sender, string msg) : base(msg) {
-            Print($"[{sender}]: {msg}", 3);
+            Print(sender, msg, PrintSeverity.Error);
         }
 
         /// <summary>
@@ -24,7 +26,20 @@ namespace ShimamuraBot
         /// <param name="msg">Message</param>
         /// <param name="inner">Exception exception</param>
         public BotException(string sender, string msg, Exception inner) : base(msg, inner) {
-            Print($"[{sender}]: {msg} :: {inner}", 3);
+            Print(sender, $"{msg}. InnerException: {inner}", PrintSeverity.Error);
+        }
+
+        /*public void ThrowIfCancelled<t>(t value) where t : cancel {
+
+        }*/
+
+        [DoesNotReturn]
+        private void ThrowIfCancelledException(CancellationToken cancellationToken) => throw new BotException("UNKNOWN! because", $"{nameof(cancellationToken)} exploded?");
+
+        public void ThrowIfCancelled(CancellationToken cancellationToken) {
+            if (cancellationToken.IsCancellationRequested) {
+                ThrowIfCancelledException(cancellationToken);
+            }
         }
     }
 }

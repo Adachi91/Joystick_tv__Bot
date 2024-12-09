@@ -33,15 +33,14 @@ namespace ShimamuraBot.Modules
         /// <summary>
         ///  Sample redeemer to interface with vNyan while I create a more robust one that will interface with 3rd-party apps / native redeems
         /// </summary>
-        /// <param name="username">String - username</param>
+        /// <remarks>All fields are mandatory except for Username even though it's a required param.<br/> it's only used for when it is a non-tip redeem<br/>e.g. they won a free redeem from one of the games_modules or were granted free redeem.</remarks>
+        /// <param name="username">String - username (Only works with non-tip redeems)</param>
         /// <param name="rTxt">String - Redeemable</param>
         /// <param name="tipped">Bool - True if they tipped otherwise false (Bypass eligible check)</param>
         /// <param name="time">int - How long in SECONDS to perform action if applicable</param>
         /// <param name="toggle">Bool - Is Toggable? Need to send end message on callback</param>
-        /// <returns>Philly Cheesestake Pizza?</returns>
-        public static async Task Redeemer(string username, string rTxt, bool tipped = false, int time = 0, bool toggle = false)
-        {
-            bool _eligible = true;
+        public static async Task Redeemer(string username, string rTxt, bool tipped = false, int time = 0, bool toggle = false) {
+            bool _eligible = true;//!IMPORTANT remove new instansiated vNayan classes and use only the 1 open socket.
             VNyan nyan = new VNyan(); // ref
 
             if (!tipped)
@@ -60,7 +59,7 @@ namespace ShimamuraBot.Modules
                 if (_eligible)
                     nyan.Redeem(rTxt);
             }
-            nyan = null; //gcc GOOOOOOOOOOOOOOOOO idk nullify it so gc will f!@# it like a lost&found (used) pocket toy
+            //nyan = null; //gcc GOOOOOOOOOOOOOOOOO idk nullify it so gc will f!@# it like a lost&found (used) pocket toy
         }
 
         /// <summary>

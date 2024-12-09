@@ -15,6 +15,7 @@ namespace ShimamuraBot.Modules
     internal class ModuleLoader
     {
         private static SemaphoreSlim _semaphore = new SemaphoreSlim(1, 1);
+        private static string name = "ModuleLoader";
 
 
         #region JSONStruct
@@ -69,8 +70,7 @@ namespace ShimamuraBot.Modules
         public static async Task LoadSettings(bool writer = false, string json = "")
         {
             await _semaphore.WaitAsync();
-            try
-            {
+            try {
                 if (!File.Exists("settings.json"))
                     await File.WriteAllTextAsync("settings.json", "{}");
 
@@ -93,16 +93,13 @@ namespace ShimamuraBot.Modules
                     }
                 }
 
-            } catch (Exception ex)
-            {
+            } catch (Exception ex) {
                 new BotException("ModuleLoader", "Fucking exploded it did, I saw it, I did. ", ex);
-            }
-            finally 
-            {
+            } finally {
                 _semaphore.Release();
-                Print($"[ModuleLoader]: Semaphore released!", 0);
+                Print(name, $"Semaphore released!", PrintSeverity.Debug);
             }
-            Print($"[ModuleLoader]: Goodbye.", 0);
+            Print(name, $"Goodbye.", PrintSeverity.Debug);
         }
 
         /// <summary>
@@ -124,7 +121,7 @@ namespace ShimamuraBot.Modules
         public static async Task WriteSettings(string module, string type, string name, string cost) =>
             await SettingsHandler(true, new string[] { module, type, name, cost });
 
-
+        // M8 wat kind of bullshit did you do - TODO: Fix this, it's a mess do not send a string[] of parameters send them all or none   or an object that you can't Key check fml
         private static async Task<ApplicationSettings> SettingsHandler(bool writing, params string[] dparams) { // string module, string type, string name, int? cost) {
             ApplicationSettings appset = null;
 

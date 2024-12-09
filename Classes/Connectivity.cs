@@ -21,7 +21,7 @@ namespace ShimamuraBot.Classes
                 pingOptions.DontFragment = true;
 
                 byte[] buffer = Encoding.ASCII.GetBytes("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
-                byte[] cloudFlufferIP = { 0x31, 0x2E, 0x31, 0x2E, 0x31, 0x2E, 0x31 };
+                byte[] cloudFlufferIP = { 0x31, 0x2E, 0x31, 0x2E, 0x31, 0x2E, 0x31 }; /// I have no idea why I did this. But I'm leaving it.
 
                 PingReply reply = ping.Send("1.1.1.1", 999, buffer, pingOptions);
 
@@ -36,6 +36,13 @@ namespace ShimamuraBot.Classes
                 return false;
             }
         }
+
+        /// <summary>
+        ///  Attempt to ping an outside resource (1.1.1.1) to see if there is connectivity.
+        /// </summary>
+        /// <remarks>Purely for sementics, to run checks to see if it's false see <see cref="Ping"/> for full Method.</remarks>
+        /// <returns>Boolean - True:Connected, False:NOCON</returns>
+        public static bool NoPing() => !Ping();
 
         public static bool InspectHost() {
             // Not implemented.

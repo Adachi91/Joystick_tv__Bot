@@ -19,6 +19,8 @@
     <RunAnalyzersDuringLiveAnalysis>False</RunAnalyzersDuringLiveAnalysis>
     <AssemblyOriginatorKeyFile>AdachiSig.pfx</AssemblyOriginatorKeyFile>
     <FileVersion>1.4.6.0</FileVersion>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">

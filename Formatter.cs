@@ -26,21 +26,21 @@ namespace ShimamuraBot
 
             // To help here are some current things this will leave a gap in
             // No more global JWT_ accessors loaded from environment.
-            private static string name = "Format.JWT";
-#pragma warning disable CS8981 // The type name only contains lower-cased ascii characters. Such names may become reserved for the language.
+            private static string name = "Format:JWT";
+#pragma warning disable CS8981
             private class validation
-#pragma warning restore CS8981 // The type name only contains lower-cased ascii characters. Such names may become reserved for the language.
+#pragma warning restore CS8981
             {
                 [JsonPropertyName("exp")]
-                public int? expiry { get; set; }// : 1731714452,
+                public required int expiry { get; set; }// : 1731714452,
                 [JsonPropertyName("nbf")]
-                public int? not_before { get; set; }//"nbf": 1730850452,
+                public required int not_before { get; set; }//"nbf": 1730850452,
                 [JsonPropertyName("iat")]
-                public int? issued_at { get; set; }//"iat": 1730850452,
+                public required int issued_at { get; set; }//"iat": 1730850452,
                 [JsonPropertyName("aud")]
-                public string audience { get; set; }//"aud": "application",
-                public string bot_id { get; set; }//"bot_id": "",
-                public string channel_id { get; set; }//"channel_id": ""
+                public required string audience { get; set; }//"aud": "application",
+                public required string bot_id { get; set; }//"bot_id": "",
+                public required string channel_id { get; set; }//"channel_id": ""
             }
 
             private static validation _WebObject { get; set; } = null;
@@ -72,20 +72,22 @@ namespace ShimamuraBot
             /// </summary>
             /// <returns>Bool - Success</returns>
             public static async Task<bool> Token() {
-                if(string.IsNullOrEmpty(ACCESS_TOKEN)) return false; // Short-Circuit - OAuth flow needs to happen, no token is held.
+                if (DEBUGGING_ENABLED) Print(name, $"Attempting to parse web token.", PrintSeverity.Debug);
+                if (string.IsNullOrEmpty(ACCESS_TOKEN)) { if (DEBUGGING_ENABLED) Print(name, $"ACCESS_TOKEN IS EMPTY", PrintSeverity.Debug); return false; } // Short-Circuit - OAuth flow needs to happen, no token is held.
 
                 //if(Expired) {
-                    try { await JWT.Parse(ACCESS_TOKEN); return true; } catch { return false; }
+                    try { await JWT.Parse(ACCESS_TOKEN); if (DEBUGGING_ENABLED) Print(name, $"Web Token succesfully stored.", PrintSeverity.Debug); return true; } catch { return false; }
                 //}
 
                 //return true;
             }
+            public static void TestMe(string code) { }
 
             public static int? GetExpiration => JWT.IsHazValue ? _WebObject.expiry : null;//!Expired() ? (int)_WebObject.expiry : null;
             public static int? GetNotBefore => JWT.IsHazValue ? _WebObject.not_before : null;
             public static int? GetIssuedTime => JWT.IsHazValue ? _WebObject.issued_at : null;
-            public static string GetChannelIdentifier => _WebObject.channel_id ?? null; //!Expired() ? _WebObject.channel_id : null;
-            public static string GetBotIdentifier => _WebObject.bot_id ?? null;
+            public static string GetChannelIdentifier => _WebObject.channel_id ?? null!; //!Expired() ? _WebObject.channel_id : null;
+            public static string GetBotIdentifier => _WebObject.bot_id ?? null!;
 
             /// <summary>
             ///  Parse a JSON Web Token and extract Payload.
@@ -112,7 +114,7 @@ namespace ShimamuraBot
 
                 // why do mornings suck so muchhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh
                 try {
-                    _WebObject = JsonSerializer.Deserialize<validation>(convert);
+                    _WebObject = JsonSerializer.Deserialize<validation>(convert)!;
                     //Print(name, $"JWT DEBUG ===>\r\nexp:{_WebObject.expiry}\r\nnbf:{_WebObject.not_before}\r\niat:{_WebObject.issued_at}\r\naud:{_WebObject.audience}\r\nbotid:{_WebObject.bot_id}\r\nchannel:{_WebObject.channel_id}\r\nEND DEBUG <=========", PrintSeverity.Debug);
                     //return validate;
                 } catch {
@@ -124,29 +126,16 @@ namespace ShimamuraBot
         #endregion
 
         #region Print Functionality
-        private static object formatPrint(string sender, string txt, PrintSeverity lvl) //TODO: Run random text strings to make sure it can handle []: tagging like "Hi [where] Are you [rom you there?"
+        private static object formatPrint(string sender, string txt, PrintSeverity lvl) //TODO: Start random text strings to make sure it can handle []: tagging like "Hi [where] Are you [rom you there?"
         {
+            string Blah;
             string leveltxt = "";
             switch((short)lvl) { case 0: leveltxt = "[Debug]"; break; case 2: leveltxt = "[Warning]"; break; case 3: leveltxt = "[Error]"; break;  }
 
             dynamic holder = new {
-                Name = sender == "Chat" ? $"[{DateTime.Now:HH:mm:ss}] " : $"[{DateTime.Now:HH:mm:ss}]{leveltxt}[{sender}]: ", // [19:33:22] Moo: Hey
+                Name = Blah = sender switch { "Chat" => $"[{DateTime.Now:HH:mm:ss}] ", "" => "", _ => $"[{DateTime.Now:HH:mm:ss}]{leveltxt}[{sender}]: " }, //sender == "Chat" ? $"[{DateTime.Now:HH:mm:ss}] " : $"[{DateTime.Now:HH:mm:ss}]{leveltxt}[{sender}]: ",
                 Message = txt
             };
-
-
-            //Yeah I overdo shit
-            /*int startIndex = txt.IndexOf('[');
-            int endIndex = txt.IndexOf("]: ");
-            string tag;
-
-            if (startIndex != -1 && endIndex != -1 && endIndex > startIndex && startIndex == 0) {
-                tag = txt.Substring(startIndex + 1, (endIndex - startIndex) - 1);
-                holder[0] = $"[{tag}]";
-                holder[1] = txt.Substring(endIndex + 3).Trim();
-            } else {
-                holder[1] = txt;
-            }*/
 
             return holder;
         }
@@ -170,8 +159,9 @@ namespace ShimamuraBot
             ConsoleColor debug = ConsoleColor.Cyan;
             ConsoleColor warn = ConsoleColor.Yellow;
             ConsoleColor error = ConsoleColor.Red;
-            Console.SetCursorPosition(0, Console.CursorTop); //I think I need to watch this. it might be overwriting user input;
-            dynamic ctx = formatPrint(sender, text, level); //index 0 is Tag from which class / service. index 1 is the message.
+            Console.SetCursorPosition(0, Console.CursorTop); //I think I need to watch this. it might be overwriting user input; (Yes.)
+            dynamic ctx = formatPrint(sender, text, level);
+            //Console.CursorLeft = 0;
 
             switch ((short)level) {
                 case 0:
@@ -180,7 +170,7 @@ namespace ShimamuraBot
                         if (DEBUGGING_ENABLED) _ = Logger.Log("Debug", new string[] { $"[Component:{sender}]:", $"{ctx.Message}" });
                     #endif
                     break;
-                case 1: Console.WriteLine($" {ctx.Name}{ctx.Message}");
+                case 1: /*int cl = Console.WindowWidth - ($" {ctx.Name}{ctx.Message}").Length;*/ Console.WriteLine($" {ctx.Name}{ctx.Message}" /*+ (cl > 0 ? new string(' ', cl) : "")*/);  //if (cl > 0) Console.Write(new string('|', cl));
                     break;
                 case 2: Console.ForegroundColor = warn; Console.Write($" {ctx.Name}"); Console.ForegroundColor = current; Console.Write($"{ctx.Message}{Environment.NewLine}");
                     break;
@@ -189,10 +179,15 @@ namespace ShimamuraBot
                     if (sender != "Logger") // Prevent recursion. BotException -> Print(Error) -> Logger -> BotException -> Print(Error) -> Logger
                         _ = Logger.Log("ERROR", new string[] { $"[Component:{sender}]:", $"{ctx.Message}" });
                     break;
-                default: Console.WriteLine($"I don't even want to know.");
+                default: Console.WriteLine($"I don't even want to know. Offender: {sender}");
                     break;
             }
-            Console.Write(">");
+            // Said what you had to say.
+
+            /// https://learn.microsoft.com/en-us/windows/console/console-virtual-terminal-sequences
+
+            //Console.Write($">{UserInput.ToString()}");
+            Console.Write($">");
         }
         #endregion
 
