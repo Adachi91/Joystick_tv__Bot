@@ -10,6 +10,8 @@ using System.Collections.Generic;
 using System.Globalization;
 using ShimamuraBot.Classes;
 using System.ComponentModel.DataAnnotations;
+using System.Runtime.InteropServices.JavaScript;
+using System.Diagnostics;
 
 namespace ShimamuraBot
 {
@@ -39,22 +41,28 @@ namespace ShimamuraBot
          * 1010 indicates that an endpoint (client) is terminating the connection because it has expected the server to negotiate one or more extension, but the server didn't return them in the response message of the WebSocket handshake.  The list of extensions that
          */
         private string name = "Websocket";
-        [Required] private Uri _wss_endpoint { get; set; }
-        private bool _connected { get; set; } = false;
-        private bool _faulted { get; set; } = false;
-        //private long _runtime { get; set; } = 0;//this was wrote with the intention of resetting the connection after say several days to clear memory usage, as this class consumes 90% of the programs resources
-        private int _reconnections { get; set; } = 0;
-        private long _TTLR { get; set; } = 0; //Time To Last Reconnect
+        private int _max_retry = 5;
+        private int _retry = 0;
+
+        /* Atomics */
+        private int _connecting = 0;
+        private int _reconnecting = 0;
+        private int _cancelled = 0;
+        private bool _connected = false;
+
+        private Uri _wss_endpoint { get; set; }
         private string channelId { get; set; } = string.Empty;
-        //private string GatewayChannel { get; } = JsonSerializer.Serialize(new { channel = "GatewayChannel" });
+        private bool _faulted { get; set; } = false;
+        private Stopwatch _cooldown { get; set; } = new();
 
         private Dictionary<int, string> chatHistory = new Dictionary<int, string>(); //For message deletion, muting, and blocking (severe)
         private List<string> chatHistory2 = new List<string>();
 
-        private SemaphoreSlim messageSemaphore = new SemaphoreSlim(1, 1); //see sendMessage() method for exampliation
+        /// <remarks>see <see cref="sendMessage(string, string, string, string)"/> method.</remarks>
+        private SemaphoreSlim messageSemaphore = new SemaphoreSlim(1, 1);
 
-        private ClientWebSocket socket;
-        private CancellationTokenSource Cancellation;
+        private ClientWebSocket? socket;
+        //private CancellationTokenSource Cancellation = new CancellationTokenSource();
 
         //modules need to be instantiated here for access, maybe there is reason for constructor to pass which modules to load.
         private VNyan? vCat;
@@ -67,7 +75,6 @@ namespace ShimamuraBot
         /// <param name="Modules">Experimental - Setup Modules for use by the WebSocket Reader</param>
         public WebsocketClient(string _channel_id, string Modules = "vnyan,") {
             channelId = _channel_id;
-            socket = null!;
 
             _wss_endpoint = new Uri($"{WSS_HOST}?token={Convert.ToBase64String(Encoding.UTF8.GetBytes($"{CLIENT_ID}:{CLIENT_SECRET}"))}");
 
@@ -80,8 +87,9 @@ namespace ShimamuraBot
                 }
             }
 
-            Cancellation = new CancellationTokenSource();
-            if (DEBUGGING_ENABLED) Print($"{this.name}:_constructor", $"Constructed the WebSocket Client.", PrintSeverity.Debug);
+            //socket.Options.AddSubProtocol("actioncable-v1-json");
+
+            Print($"{this.name}:_constructor", $"WebSocketClient constructed.", PrintSeverity.Debug);
         }
 
 
@@ -96,35 +104,43 @@ namespace ShimamuraBot
         ///  Starts the WebSocket Client and connects to WSS_HOST endpoint
         /// </summary>
         /// <returns>Boolean - True:Connected && Subscribed || False:Failure</returns>
-        public async Task<bool> Connect(bool reconnect=false) {
-            if (_connected) { Print(this.name, $"Socket already in use.", PrintSeverity.Warn); return false; }
+        public async Task<bool> Connect(bool reconnect = false) {
+            if (Interlocked.CompareExchange(ref _connecting, 0, 0) == 1 || _connected) { Print($"{this.name}:Connect", $"Socket is already in use. (Connected: {_connected}, Connecting: {_connecting}, Thread: {Environment.CurrentManagedThreadId})", PrintSeverity.Warn); return false; }
+            Interlocked.Exchange(ref _connecting, 1);
 
-            if (!reconnect) {
-                if (Connectivity.NoPing()) { Print(this.name, $"Unable to detect internet connectivity.", PrintSeverity.Error); return false; }
+            if (!reconnect && Connectivity.NoPing()) {
+                Print($"{this.name}:Connect", $"Unable to detect internet connectivity.", PrintSeverity.Error);
+                Interlocked.Exchange(ref _connecting, 0);
+                return false;
             }
 
-            if (Cancellation != null && Cancellation.IsCancellationRequested && !reconnect) Cancellation.TryReset();
-            if (Cancellation == null) Cancellation = new CancellationTokenSource();
+            //if (Interlocked.CompareExchange(ref _cancelled, 1, 0) == 1) // set isCancelled back to false.
+                Interlocked.Exchange(ref _cancelled, 0);
 
+            //if (Cancellation.IsCancellationRequested)
+                //if(!Cancellation.TryReset()) { Cancellation.Dispose(); Cancellation = new(); }
 
-            if (DEBUGGING_ENABLED)
-                Print(this.name, $"Attempting to open a new Websocket Connection to {HOST}.", PrintSeverity.Debug);
+            Print($"{this.name}:Connect", $"Attempting to open a new Websocket Connection to {WSS_HOST}. (Thread: {Environment.CurrentManagedThreadId})", PrintSeverity.Debug);
 
-            if (socket != null) {
-                if(DEBUGGING_ENABLED) Print(this.name, $"Disposing an old WebSocket before continuing.", PrintSeverity.Debug);
-                socket.Dispose(); // Socket re-use if `Stop()` and `Starting()`
+            if (socket != null) { // Welcome back. The socket needs to be disposed to prevent mismatch state. Yes it happens a lot.
+                //Print(this.name, $"Disposing an old WebSocket before continuing.", PrintSeverity.Debug);
+                socket.Abort();
+                socket.Dispose();
             }
 
             socket = new ClientWebSocket();
             socket.Options.AddSubProtocol("actioncable-v1-json");
 
+            _ = WebsocketReaderV2();
 
-            _ = WebsocketReader();
-
-            if (await socketStatus()) {
-                if (DEBUGGING_ENABLED) Print(this.name, $"Sending 'subscribe' to WebSocket endpoint.", PrintSeverity.Debug);
+            if (await SocketOpen()) {
+                Print($"{this.name}:Connect", $"Sending 'subscribe' to WebSocket endpoint.", PrintSeverity.Debug);
+                Interlocked.Exchange(ref _reconnecting, 0);
+                _retry = 0;
                 return await sendMessage("subscribe"); // this is a lot more pretty I like it
             }
+
+            //Cancellation.Cancel();
             return false;
         }
 
@@ -133,35 +149,29 @@ namespace ShimamuraBot
         ///  Prevent mass flood of Connect attempts by slowing down the flow each error.
         /// </summary>
         private async Task Reconnect() {
-            if (_faulted && Connectivity.NoPing()) {
-                if (DEBUGGING_ENABLED) Print($"{this.name}:Reconnect", $"Could not detect internet connection, waiting for connectivity before attempting reconnection.", PrintSeverity.Debug);
+            if(Interlocked.CompareExchange(ref _reconnecting, 0, 0) == 1) { Print($"{this.name}:Reconnect", $"Reconnect is already in progress.", PrintSeverity.Debug); return; }
+            Interlocked.Exchange(ref _reconnecting, 1);
+
+            if (Connectivity.NoPing()) {
+                Print($"{this.name}:Reconnect", $"Could not detect internet connection, waiting for connectivity before attempting reconnection.", PrintSeverity.Debug);
                 if (!await WaitForConnectivityAsync())
                     return;
-                if (DEBUGGING_ENABLED) Print($"{this.name}:Reconnect", $"Connectivity re-established.", PrintSeverity.Debug);
+                Print($"{this.name}:Reconnect", $"Connectivity re-established.", PrintSeverity.Debug);
             }
 
-            if (!_faulted) return;
+            Print($"{this.name}:Reconnect", $"Attempting to re-establish connection with {WSS_HOST}.", PrintSeverity.Normal);
 
-            if(Cancellation == null) { // I think this will reset the token, because when it reachs here it will be disposed.
-                Cancellation = new CancellationTokenSource();
-            }
-
-            if (GetUnixTimestamp() - _TTLR > 300 || _TTLR == 0) { _TTLR = GetUnixTimestamp(); _reconnections = 0; } //reset "Time To Last Reconnect" and attempts after 5 minutes
-
-            while (!Cancellation.IsCancellationRequested) {
-                if (_reconnections < 15) _reconnections++;
-                Print(this.name, $"Attempting to re-establish connection with {WSS_HOST}. n({_reconnections})", PrintSeverity.Normal);
-                await Task.Delay(1_000 * _reconnections); //1, 2, 3, 4, 5 seconds
-
-                //_ = await Connect();
+            while(_retry++ < _max_retry) {
                 if (await Connect())
-                    break;
+                    return;
+                await Task.Delay(720);
             }
+            new BotException($"{this.name}:Reconnect", $"Could not re-establish connection with {WSS_HOST}");
         }
 
 
         private async Task<bool> WaitForConnectivityAsync() {
-            while(!Cancellation.IsCancellationRequested) {
+            while(!IsCancelled) {
                 if (Connectivity.Ping())
                     return true;
                 await Task.Delay(500);
@@ -176,9 +186,9 @@ namespace ShimamuraBot
         /// <returns>Bool - True:Closed_Grace, False:Timeout</returns>
         /// <remarks>This will attempt to close the WebSocket but in rare cases can timeout, it will normally return True. Cases checking for socket re-use should not try re-use</remarks>
         public async Task<bool> Close() {
-            Cancellation.Cancel();
+            Interlocked.Exchange(ref _cancelled, 1);
 
-            if (!await socketStatus(-1)) {
+            if (!await SocketOpen(-1)) { // Semantics might seem off but yes socket is supposed to return a true for closure with op -1
                 new BotException(this.name, "The socket did not close within the expected time (Timeout)");
                 return false;
             }
@@ -189,7 +199,7 @@ namespace ShimamuraBot
         }
 
 
-        private bool closure_status => (
+        private bool closure_status => socket != null && (
                socket.State == WebSocketState.Closed
             || socket.State == WebSocketState.Aborted
             || socket.State == WebSocketState.CloseReceived
@@ -199,32 +209,35 @@ namespace ShimamuraBot
         /// <summary>
         ///  Returns the status of the socket
         /// </summary>
-        /// <returns>Bool - True if available for usage, otherwise False</returns>
-        private async Task<bool> socketStatus(int code = 0) { //-1 is awaiting closure so if it's <0 it's a CLOSURE check. OTHERWISE figure it the fuck out.
-            long socketWait = GetUnixTimestamp(); // Reintroduced, it's ironic, very much.
-            if (DEBUGGING_ENABLED) Print(this.name, $"Attempting to assert socket status.", PrintSeverity.Debug);
+        /// <param name="code"><see cref="int"/> -1 to check closure, otherwise leave it default</param>
+        /// <returns>Bool - True:Availabe:Closed, False:Timeout:Timeout</returns>
+        private async Task<bool> SocketOpen(int code = 0) {
+            string name = $"{this.name}:SocketState";
 
-            while (GetUnixTimestamp() - socketWait < 2) {
+            Print(name, $"Attempting to assert socket status.", PrintSeverity.Debug);
+            Stopwatch timeout = Stopwatch.StartNew();
+
+            while (timeout.ElapsedMilliseconds < 3_333) {
                 if (socket == null) {
-                    if (DEBUGGING_ENABLED) Print(this.name, $"Socket Status is null.", PrintSeverity.Debug);
+                    Print(name, $"Socket is null.", PrintSeverity.Debug);
                     return false;
                 }
 
                 // Check for closure
                 if (code < 0 && closure_status) {
-                    if (DEBUGGING_ENABLED) Print(this.name, $"Socket Status is Waiting for Closure.", PrintSeverity.Debug);
+                    Print(name, $"Socket is closed.", PrintSeverity.Debug);
                     return true;
                 }
 
                 // Check for open state
-                if (socket.State == WebSocketState.Open && code >= 0) {
-                    if (DEBUGGING_ENABLED) Print(this.name, $"Socket Status is Open.", PrintSeverity.Debug);
+                if (code == 0 && socket.State == WebSocketState.Open) {
+                    Print(name, $"Socket is Open.", PrintSeverity.Debug);
                     return true;
                 }
 
-                await Task.Delay(5);
+                await Task.Delay(9);
             }
-            if (DEBUGGING_ENABLED) Print(this.name, $"Socket Status Timed-out.", PrintSeverity.Debug);
+            Print(name, $"Socket Timed-out while checking state.", PrintSeverity.Debug);
             return false;
         }
 
@@ -232,9 +245,11 @@ namespace ShimamuraBot
         /// <summary>
         ///  Returns the socket status
         /// </summary>
-        /// <returns>Bool - True if connected and not closing, Otherwise False</returns>
-        public bool Open => (_connected && !Cancellation.IsCancellationRequested);
-
+        /// <returns><see cref="bool"/> True:Connected, False:Disconnected</returns>
+        public bool Open => socket != null && (_connected && Interlocked.CompareExchange(ref _cancelled, 0, 0) != 1);
+        private bool IsCancelled => Interlocked.CompareExchange(ref _cancelled, 0, 0) == 1;
+        // 1, 0, 0 x<-y=false=1 != 1 false // TRUE && (TRUE && FALSE) == FALSE
+        // 0, 0, 0 X<-y=false=0 == 1 false
 
         public string[] getMessage(int id) // I think this for FAIL2BAN, err I mean banning/deleting.
         {
@@ -257,38 +272,35 @@ namespace ShimamuraBot
 
         private Task onMessage_StreamEvent(string payload) { // I have no idea what I was smoking when I wrote this.
             RootStreamEvents? streamEvent;
-            try {
-                streamEvent = JsonSerializer.Deserialize<RootStreamEvents>(payload);
-                //if (streamEvent.message.metadataObject.tipMenuItem == "Remove Bra") vCat.Redeem("tta");
-            } catch (Exception ex) {
-                new BotException($"{this.name}:StreamEvent", $"Could not deserialize the WebSocket message.", ex);
-                return Task.CompletedTask; // Task failed successfully! /s
-            }
-            if (streamEvent == null || streamEvent.message == null) { new BotException($"{this.name}:StreamEvent", $"The chances of this falling through are so fucking rare, congrats. somehow streamevent was null :: Raw payload: {payload}"); return Task.CompletedTask; }
 
-            switch (streamEvent.message.type) {
+            try { streamEvent = JsonSerializer.Deserialize<RootStreamEvents>(payload); } catch (Exception ex) { new BotException($"{this.name}:StreamEvent", $"Could not deserialize the WebSocket message.", ex); return Task.CompletedTask; }
+
+            switch (streamEvent!.message.type) {
                 case "Started":
                     // stream started
-                    break;
+                    Print("NT", "Your stream is now live.", PrintSeverity.Normal);
+                    return Task.CompletedTask;
                 case "StreamEnding": // Stream ending (pending state? maybe for reconnection attempt?)
-
-                    break;
+                    /// noop - for now.
+                    return Task.CompletedTask;
                 case "Ended": // Stream has ended
-
-                    break;
+                    Print("NT", $"your stream has ended.", PrintSeverity.Normal);
+                    return Task.CompletedTask;
                 case "ViewerCountUpdated": // Polled maybe? otherwise on actual change. it looks like it can actually generate 2 different ID's and fire them both
-                    // When viewer count changes.
+                    Console.Title = $"♥ Shimamura :: {streamEvent.message.Metadata.viewerCount.ToString()} ♥";
+                    return Task.CompletedTask;
                     /// noop
-                    break;
+                case "SettingsUpdated":
+                    /// noop - for now, I might link this to the API call.
+                    return Task.CompletedTask;
                 case "Tipped":
-                    // Received Tip
-                    /// ===> This goes to Module eventually for now create a class maybe or something to handle WebSocket connect to vNyan
+                    /// ===> This goes to Module eventually, for now create a class maybe or something to handle WebSocket connect to vNyan
                     /// This is also going to be the most tricky one to handle because you need to handle all client modules
                     /// assuming it is a 'Module' type tip.
-                    var redeem = streamEvent.message.text.ToLower();
-                    var redeemed = streamEvent.message.metadataObject.tipMenuItem;
-                    var redeemer = streamEvent.message.metadataObject.who;
-                    var cost = streamEvent.message.metadataObject.howMuch;
+                    var redeem = streamEvent.message.text ?? "Unknown redeem 'Text'";
+                    var redeemed = streamEvent.message.Metadata.tipMenuItem;
+                    var redeemer = streamEvent.message.Metadata.who;
+                    var cost = streamEvent.message.Metadata.howMuch;
 
                     /// I think they split(' ', 2) tip items before sending over socket, reasoning:
                     /// "Remove Bra for the Entire Stream" is a tip item, however I received "Remove Bra"
@@ -318,89 +330,106 @@ namespace ShimamuraBot
                                 _ = SendMessage("send_message", $"Thank you for the tip ! If you have any requests let me know ^^ - A.S.");
                             else
                                 // If this sends a purple heart on the first try, I'll flip my table. then unflip it.
-                                _ = SendMessage("send_message", $"Thank you for the tip {streamEvent.message.metadataObject.who} ! \u1F49C");
+                                //yeh doesn't work.
+                                _ = SendMessage("send_message", $"Thank you for the tip {streamEvent.message.Metadata.who} ! \u1F49C"); // 1F49C is supposed to be purple heart, however GL having that render on a console buffer.
                             break;
                     }
-                    break;
+                    return Task.CompletedTask;
                 case "WheelSpinClaimed":
                     // Wheelspin tip - I do not believe you have implemnted any way of handling this yet, soo. DRAW THE FUCKING OWL
-                    Print("", $"{streamEvent.message.metadataObject.who} just spun the wheel and won {streamEvent.message.metadataObject.prize} for {streamEvent.message.metadataObject.howMuch} !", PrintSeverity.Normal);
+                    Print("", $"{streamEvent.message.Metadata.who} just spun the wheel and won {streamEvent.message.Metadata.prize} for {streamEvent.message.Metadata.howMuch} !", PrintSeverity.Normal);
                     // owl
                     break;
                 case "Followed": // You haz new fren
-                    _ = SendMessage("send_message", $"Welcome to the Cherry Blossoms {streamEvent.message.metadataObject.who}. Thanks so much for the Follow !");
-                    Print("", $"A new follower has appeared! Say hi to {streamEvent.message.metadataObject.who}!", PrintSeverity.Normal);
+                    _ = SendMessage("send_message", $"Welcome to the Cherry Blossoms {streamEvent.message.Metadata.who}. Thank you the Follow !");
+                    Print("", $"A new follower has appeared! Say hi to {streamEvent.message.Metadata.who}!", PrintSeverity.Normal);
+                    return Task.CompletedTask;
+                case "FollowerCountUpdated":
+                    // Noop - 
                     return Task.CompletedTask;
                 case "DeviceConnected": // You haz device connected and reported back by API
                     Print("", $"Your toy was registered as `{streamEvent.message.text}` from Joystick", PrintSeverity.Normal);
                     // IDK probably not worth mentioning but I don't have a toy to test how connection works. If someone was actually running Shimararu it might be useful to know on the fly when it was registered.
-                    break;
+                    return Task.CompletedTask;
                 default:
-                    if (DEBUGGING_ENABLED) Print($"{this.name}:StreamEvent", $"Received a new Event that is not handled! EXCITING!", PrintSeverity.Debug);
-                    _ = Logger.Log($"{this.name}:WebSocket:StreamEvent", new string[] { $"Unhandled StreamEvent Raw :: ", payload });
+                    Print($"{this.name}:StreamEvent", $"Received a new Event that is not handled! EXCITING!", PrintSeverity.Debug);
+                    _ = Logger.LogAsync($"{this.name}:WebSocket:StreamEvent:Discover L I M P", new string[] { $"Unhandled StreamEvent Raw :: ", payload });
                     break;
             }
 
-            // Print tipped menu item if it exists
-            if (!string.IsNullOrEmpty(streamEvent.message.metadataObject.tipMenuItem))
-                Print("StreamEvent-Tip", $"tipMenuItem :: {streamEvent.message.metadataObject.tipMenuItem}", PrintSeverity.Warn);
-
-
-            // <=================== This just fucking mistifies me, I have no fucking idea how this works. There is no lower casting. The Payload is "F"ollowed.
-            // I'm just going to assume some kind of fucking weird magic is happening
-            // Not compiler magic, literal fucking harry potter magic
-            // I'm pretty sure I'm about to name my PC voldermonty or whatever the fuck his name is.
-            // Also Snape did nothing wrong.
-            // Nevermind I found the self reflection to think that I'm possibly missing something and wrong
-            // I was searching metadataObj which _IS_ lower case, Type TYPE is Typecased.
-            // Okay I'm leaving this in so, if you're reading this on github, I'm sorry.
-            // Not really, though.
-            // ======================>
-            //if (streamEvent.message.metadataObject.what == "followed") { Print("Shimamura", $"A new follower has appeared! Say hi to {streamEvent.message.metadataObject.who}!", PrintSeverity.Normal); _ = SendMessage("send_message", $"Welcome to the Cherry Blossoms {streamEvent.message.metadataObject.who}. Thanks so much for the Follow !"); return Task.CompletedTask; }
-            
-            /// Updates the Console header to display number of viewers.
-            if (streamEvent.message.type == "ViewerCountUpdated") { Console.Title = $"♥ Shimamura :: {streamEvent.message.metadataObject.numberOfViewers.ToString()} ♥"; return Task.CompletedTask; }
-            //need to create a Timer class to create a new timer on timed tips e.g. Remove Bra/Mask for 30 minutes as it needs to be tracked internally to communicate with 3rd party apps like vNyan, VTS
-
             // Found you, you little bugger you.
             // Discover L I M P
-            Print("StreamEvent", $"unhandled event: {streamEvent.message.text}", PrintSeverity.Normal); //So far: Viewer update, Stream setting update, Stream starting, Stream ending, Stream Ended
-            //write the code for events on tip
-            //if()
-            _ = Logger.Log("StreamEvent", new string[] { streamEvent.message.text, $"who: {streamEvent.message.metadataObject.who} ::", $"what: {streamEvent.message.metadataObject.what} :: tipmenitem: {streamEvent.message.metadataObject.tipMenuItem} :: prize: {streamEvent.message.metadataObject.prize} :: howMuch: {streamEvent.message.metadataObject.howMuch}" });
+
+            _ = Logger.LogAsync("StreamEvent", new string[] { streamEvent.message!.text!, $"who: {streamEvent.message.Metadata.who} ::", $"what: {streamEvent.message.Metadata.what} :: tipmenitem: {streamEvent.message.Metadata.tipMenuItem} :: prize: {streamEvent.message.Metadata.prize} :: howMuch: {streamEvent.message.Metadata.howMuch} {Environment.NewLine}-> Payload: {payload}" });
             return Task.CompletedTask;
         }
 
 
-        private Task onMessage_Message(string payload) { // TODO: Every one of these tries to deserialize. it's needs to be Try-Catch
-            var msg = JsonSerializer.Deserialize<RootMessageEvent>(payload);
+        /// <summary>
+        ///  Handles bang bot commands.
+        /// </summary>
+        /// <param name="message"><see cref="RootMessageEvent"/> deserialized message.</param>
+        /// <returns></returns>
+        private Task OnBangCommand(RootMessageEvent msg) {
+
+            if (vCat != null) {
+                var cmd = msg.message.text.Split('.')[1].ToLower();
+
+                switch (cmd) {
+                    case "duck" or "yeet":
+                        vCat.Redeem(cmd);
+                        break;
+                    case "testing":
+                        vCat.Redeem("tta");
+                        break;
+                }
+            } else {
+                new BotException($"{this.name}:CommandHandler", $"No instance of vNyan was found.");
+            }
+
+            return Task.CompletedTask;
+        }
+
+
+        private Task onMessage_Message(string payload) {
+            RootMessageEvent? msg;
+
+            try { msg = JsonSerializer.Deserialize<RootMessageEvent>(payload); } catch (Exception ex) { new BotException(name, $"Unable to deserialize OnMessage: {payload}", ex); return Task.CompletedTask; }
+
             ///chatHistory2.Add(msg.message.messageId);
             //if (chatHistory2[user_input])
-            if (msg.message.visibility != "public") return Task.CompletedTask; // I think DM to bot only - not user. so this should be handled for bot-whisper interactions.
 
-            Print($"Chat", $"{msg.message.author.username}: {msg.message.text}", PrintSeverity.Normal);
-            if (!msg.message.text.StartsWith("."))
-                Console.Beep();
-            _ = Logger.Log("ChatMessage", new string[] { $"{msg.message.author.username}: {msg.message.text}" });
-            if (msg.message.text.StartsWith(".duck")) vCat.Redeem("duck");
-            else if (msg.message.text.StartsWith(".yeet")) vCat.Redeem("yeet");
-            else if (msg.message.text.StartsWith(".testing")) vCat.Redeem("tta");
+            if (msg.message.text.ToLower().Contains("adachi91")) { if (_cooldown.IsRunning && _cooldown.ElapsedMilliseconds > 13_130) { _cooldown.Restart(); } else { _cooldown.Start(); if (WebUI!.Open && _cooldown.ElapsedMilliseconds < 13_000) _ = AudioOot.PlayAudioAsync(AudioOot.adsfasdfasdfasFUCKYOUdfsdafasdfasdfasdfsadfsadfs.HeyDumb, WebUI); } }
+            if (msg.message.text.Contains("002") || msg!.message.text.Contains("zerotwo")) if (WebUI!.Open) WebUI.SendSSEImageAsync("https://steamuserimages-a.akamaihd.net/ugc/778494769436587920/675371BED432AF394DB2F145632671082F4779DF/?imw=5000\u0026imh=5000\u0026ima=fit\u0026impolicy=Letterbox\u0026imcolor=%23000000\u0026letterbox=false", 4); else new BotException(name, $"WebUI is not open.");
+            if (msg.message.visibility != "public") { _ = Logger.LogAsync($"{this.name}:OnMessage", new string[] { $"Discover L I M P - NonPub msg: {payload}" }); return Task.CompletedTask; }// I think DM to bot only - not user. so this should be handled for bot-whisper interactions.
+            if (msg.message.text.StartsWith('.')) { _ = OnBangCommand(msg); return Task.CompletedTask; }
+
+            Print("Chat", $"{msg.message.author.username}: {msg.message.text}", PrintSeverity.Normal);
+
+            
+            _ = AudioOot.PlayAudioAsync(AudioOot.adsfasdfasdfasFUCKYOUdfsdafasdfasdfasdfsadfsadfs.Beep);
+            _ = Logger.LogAsync("ChatMessage", new string[] { $"{msg.message.author.username}: {msg.message.text}" });
+
             return Task.CompletedTask;
         }
 
 
         private Task onMessage_PresenceEvent(string payload) {
-            var presencemsg = JsonSerializer.Deserialize<RootPresenceEvent>(payload);
-            var eveType = presencemsg.message.type == "enter_stream" ? "Entered the chat" : "Left the chat";
-            _ = Logger.Log("UserPresence", new string[] { $"{presencemsg.message.text} {eveType}" });
+            RootPresenceEvent? msg;
+
+            try { msg = JsonSerializer.Deserialize<RootPresenceEvent>(payload); } catch (Exception ex) { new BotException($"{this.name}:OnPresence", $"Could not deserialize remote message: {payload}", ex); return Task.CompletedTask; }
+
+            var eveType = msg!.message.type == "enter_stream" ? "Entered the chat" : "Left the chat";
+            _ = Logger.LogAsync("UserPresence", new string[] { $"{msg.message.text} {eveType}" });
             return Task.CompletedTask;
         }
 
 
         private Task onMessage(string data) {
-            if (data.StartsWith("{\"type\":\"ping\"")) return Task.CompletedTask;
+            if (String.Compare(data, 0, "{\"type\":\"ping\"", 0, 14, StringComparison.OrdinalIgnoreCase) == 0) return Task.CompletedTask; // why? BECAUSE I STILL FIND IT HILARIOUS
 
             if (data.Contains("confirm_subscription")) { // TODO better comparison other than "Contains"
+                if(DEBUGGING_ENABLED /* DO NOT REMOVE THIS ONE. */ ) _ = Logger.LogAsync(this.name, new string[] { data });
                 Print(this.name, $"Estasblished connection to chatroom.", PrintSeverity.Normal);
                 return Task.CompletedTask;
             } else if (data.Contains("reject_subscription")) {
@@ -410,26 +439,17 @@ namespace ShimamuraBot
 
             if (!data.Contains("\"message\":")) return Task.CompletedTask;
 
-            //ChatGPT's optimization is to put this at the top of the method because "it will reduce json parsing calls". I can't tell if it's 99% special or just doesn't understand my code
-            JsonNode jsonNode = JsonNode.Parse(data);
+            JsonNode jsonNode = JsonNode.Parse(data)!;
 
             string eventType = (string)jsonNode["message"]!["event"]!;
 
             switch (eventType) {
-                case "StreamEvent":
-                    _ = onMessage_StreamEvent(data);
-                    if(DEBUGGING_ENABLED) _ = Log("StreamEvent", new string[] { "Raw Socket Output:: ", $"{data}", " ::end" });
-                    //TODO: Fix vNyan communication, it's not spawning an instance of vNyan properly to send Websocket request through, even override of tta did not work.
-                    break;
-                case "ChatMessage": //deserialize Root ChatMessage class
-                    _ = onMessage_Message(data);
-                    break;
-                case "UserPresence": //deserialize Root UserPresence class
-                    _ = onMessage_PresenceEvent(data);
-                    break;
-                default: //This shouldn't trigger but if it does capture it so I can inspect what went wrong
-                    Print($"{this.name}-EventType", $"Unexpected request :: eventType: {eventType} :: Json Dump: {data}", PrintSeverity.Debug);
-                    _ = Logger.Log($"{this.name}-EventType", new string[] { $"Unexpected request", $"EventType={eventType}", $"JSON={data}" });
+                case "StreamEvent": _ = onMessage_StreamEvent(data); break;
+                case "ChatMessage": _ = onMessage_Message(data); break;
+                case "UserPresence": _ = onMessage_PresenceEvent(data); break;
+                default:
+                    Print($"{this.name}:EventType", $"Unexpected request from remote host has been logged.", PrintSeverity.Debug);
+                    _ = Logger.LogAsync($"{this.name}-EventType", new string[] { $"Unexpected Type from {WSS_HOST}", $"Event={eventType}", $"JSON={data}" });
                     break;
             }
             return Task.CompletedTask;
@@ -447,20 +467,15 @@ namespace ShimamuraBot
         /// <exception cref="NotImplementedException"></exception>
         /// <exception cref="Exception"></exception>
         private string MessageConstructor(string action, string msg="", string user="", string msgid="") { // Text, MessageID, Username are the only 3 parameers you'll ever need.
-            switch (action)
-            {
+            switch (action) {
                 case "subscribe":
-                    if (DEBUGGING_ENABLED) Print(this.name, $"Constructing subscription message for the socket.", PrintSeverity.Debug);
-
-                    return new
-                    {
+                    return new {
                         command = action,
                         identifier = new { channel = "GatewayChannel" }.Stringify()
                     }.Stringify();
 
                 case "send_message":
-                    return new
-                    {
+                    return new {
                         command = "message",
                         identifier = new { channel = "GatewayChannel" }.Stringify(),
                         data = new {
@@ -471,12 +486,10 @@ namespace ShimamuraBot
                     }.Stringify();
 
                 case "send_whisper":
-                    return new
-                    {
+                    return new {
                         command = "message",
                         identifier = new { channel = "GatewayChannel" }.Stringify(),
-                        data = new
-                        {
+                        data = new {
                             action,
                             username = user,
                             text = msg,
@@ -494,14 +507,14 @@ namespace ShimamuraBot
                 case "block_user":
                     throw new NotImplementedException();
                 default:
-                    throw new Exception($"Invalid data type fall-thru. Data: {action}");
+                    throw new BotException($"{this.name}:MessageConstructor" ,$"Invalid data type fall-thru. Data: {action}");
             }
         }
 
         public async Task<bool> SendMessage(string action, string msg) => await sendMessage(action, msg, "", ""); // Do you really need to know? ehh iffy check references
         public async Task<bool> SendWhisper(string action, string msg, string user) => await sendMessage(action, msg, user, "");
-        public async Task<bool> Mute_User(string action, string msgid) => false;
-        public async Task<bool> Unmute_User(string action, string user) => false;
+        public async Task<bool> Mute_User(string action, string msgid) => await Task.FromResult(true);
+        public async Task<bool> Unmute_User(string action, string user) => await Task.FromResult(true);
         public async Task<bool> Block_User(string action, string msgid) {
             while(true) { // problem is this could get flushed off the buffer before seen if messages are incoming. how handle
                 Print("Blocking", $"This action is severe, to confirm please make sure username/msgid is correct. MessageID: {msgid} (y/n)", PrintSeverity.Error); // maybe capture username too.
@@ -535,17 +548,17 @@ namespace ShimamuraBot
             //Attempting to invoke a send operation while another is in progress or a receive operation while another is in progress will result in an exception.
             await messageSemaphore.WaitAsync();
             try {
-                if (await socketStatus()) {
+                if (socket != null && socket.State == WebSocketState.Open) {
                     var msgsfs = MessageConstructor(action, msg, user, msgid);
                     //Print("SendMessage-JSON", $"{msgsfs}", PrintSeverity.Debug);
-                    await socket.SendAsync(Encoding.UTF8.GetBytes(msgsfs), WebSocketMessageType.Text, true, Cancellation.Token); //byte[] can be implicitly converted to ArraySegment<byte> without explicitly wrapping new ArraySegment<byte>, not really documented
+                    //CancellationTokenSource __cts__ = new();
+                    await socket.SendAsync(Encoding.UTF8.GetBytes(msgsfs), WebSocketMessageType.Text, true, default); //byte[] can be implicitly converted to ArraySegment<byte> without explicitly wrapping new ArraySegment<byte>, not really documented
+                    //__cts__.Dispose();
                     _success = true;
                 } else
                     throw new BotException(this.name, "Socket status was not connected or unobtainable while trying to send a message.");
             } catch (WebSocketException wse) {
                 new BotException(this.name, $"Could not send message: {action} :: msg: {msg} :: user: {user} :: messageId: {msgid}", wse);
-            } catch (BotException) {
-                // Ignore self thrown exception : exception.
             } catch (Exception ex) {
                 new BotException(this.name, $"Unhandled Exception", ex);
             } finally { //https://stackoverflow.com/a/10260233
@@ -556,26 +569,87 @@ namespace ShimamuraBot
         }
 
 
+        private async Task WebsocketReaderV2() {
+            string name = $"{this.name}:ReaderV2";
+            Print(name, $"Starting WebSocket Reader Version 2. (Thrad: {Environment.CurrentManagedThreadId})", PrintSeverity.Debug);
+
+            try {
+                if (socket == null) throw new BotException(name, $"Thrown: Socket was null.");
+                await socket.ConnectAsync(_wss_endpoint, default);
+                _connected = true;
+                _faulted = true;
+                Interlocked.Exchange(ref _connecting, 0);
+
+                byte[] buffer = new byte[2048];
+                Print(name, $"?{IsCancelled} ?{_cancelled} :: !{!IsCancelled} !{_cancelled}", PrintSeverity.Warn);
+                while(!IsCancelled) {
+                    /* I rely on the host here to break the await with a {"ping"} to stop the reader. I know it's not the best but I'll work on it */
+                    var socketMsg = await socket.ReceiveAsync(buffer, default);
+
+                    if (socketMsg.MessageType == WebSocketMessageType.Text) {
+                        _ = onMessage(Encoding.UTF8.GetString(buffer, 0, socketMsg.Count));
+                        // REMOVE
+                        //Print(name, $"Hello", PrintSeverity.Debug);
+
+                        continue;
+                    } else if (socketMsg.MessageType == WebSocketMessageType.Close) {
+                        switch ((int?)socketMsg.CloseStatus) { case 1000 or 1002 or 1007 or 1008: _faulted = false; break; }
+                        Print(name, $"The socket to {WSS_HOST} was terminated. (State: {(int?)socketMsg.CloseStatus ?? 1006})", PrintSeverity.Warn);
+                        break;
+                    }
+                }
+                Print(name, $"?{IsCancelled} ?{_cancelled} :: !{!IsCancelled} !{_cancelled}", PrintSeverity.Warn);
+                if (IsCancelled) { // normal closure you stupid shit.
+                    if (socket.State == WebSocketState.Open) { Print(name, $"Sent goodbye message to the socket.", PrintSeverity.Debug); await socket.CloseAsync(WebSocketCloseStatus.NormalClosure, "FaretheWell", default); }
+                    _faulted = false;
+                    Print(name, $"Socket to {WSS_HOST} closed. (Normal Closure)", PrintSeverity.Normal);
+                }
+
+            } catch (WebSocketException) {
+                new BotException(name, $"Connection to {WSS_HOST} was lost. (State: {(int?)socket!.CloseStatus ?? 1006}, Thread: {Environment.CurrentManagedThreadId})");
+                Interlocked.Exchange(ref _connecting, 0);
+            } catch (Exception ex) {
+                new BotException(name, $"Unhandled Exception (Thread: {Environment.CurrentManagedThreadId})", ex);
+                Interlocked.Exchange(ref _connecting, 0);
+            } finally {
+                if (!IsCancelled && !_faulted) Print(name, $"Abnormal closure detected. (State: {(int?)socket!.CloseStatus ?? 1006})", PrintSeverity.Debug);
+                
+                _connected = false;
+                
+                if (_faulted) {
+                    Print(name, $"Socket fault detected. Reconnection will be attempted to restore the connection.", PrintSeverity.Debug);
+                    name = null;
+
+                    _ = Reconnect();
+                }
+            }
+        }
+
         /// <summary>
         ///  Websocket Reader - Connects if not connected and waits for socket messages 
         /// </summary>
         /// <returns></returns>
-        private async Task WebsocketReader() {
-            if (DEBUGGING_ENABLED) Print(this.name, $"Starting the WebSocket Reader.", PrintSeverity.Debug);
+        /*private async Task WebsocketReader() {
+            string name = $"{this.name}:Reader";
+            Print(name, $"Starting the WebSocket Reader. (Thread: {Environment.CurrentManagedThreadId})", PrintSeverity.Debug);
 
             try {
-                await socket.ConnectAsync(_wss_endpoint, Cancellation.Token);
+                if (socket == null) throw new BotException(name, $"Thrown: Socket was null.");
+                await socket.ConnectAsync(_wss_endpoint, default);
                 _connected = true;
                 _faulted = true;
+                Interlocked.Exchange(ref _connecting, 0);
 
-                byte[] buffer = new byte[4096]; //1024 bytes IF the header Sec-Websocket-Maximum-Message-Size is detected, then that is the maximum size the buffer can be to prevent DDoSing.
+                // was able to send 1200 bytes, I don't know the upper limit of char count but a minimum of 1200 bytes can be achieved.
+                byte[] buffer = new byte[2048]; //1024 bytes IF the header Sec-Websocket-Maximum-Message-Size is detected, then that is the maximum size the buffer can be to prevent DDoSing.
                 Task<WebSocketReceiveResult> socketMsg;
                 WebSocketReceiveResult socketResult;
+                Task? TaskTriggered;
 
                 //Websocket Reader Loop
                 while (socket.State == WebSocketState.Open && !Cancellation.IsCancellationRequested) {
                     socketMsg = socket.ReceiveAsync(buffer, default); //default is intentional - byte[] can be implicitly converted to ArraySegment<byte> without explicitly wrapping new ArraySegment<byte>, not really documented
-                    var TaskTriggered = await Task.WhenAny(Task.Delay(Timeout.Infinite, Cancellation.Token), socketMsg); // Wait with a GOTO #ID, waiting to jump to either Timeout or SocketMsgReceived.
+                    TaskTriggered = await Task.WhenAny(Task.Delay(Timeout.Infinite, Cancellation.Token), socketMsg); // Wait with a GOTO #ID, waiting to jump to either Timeout or SocketMsgReceived.
 
                     if (TaskTriggered != socketMsg) break;
 
@@ -586,94 +660,107 @@ namespace ShimamuraBot
                         continue;
                     } else if (socketResult.MessageType == WebSocketMessageType.Close) {
                         switch ((int?)socketResult.CloseStatus) { case 1000 or 1002 or 1007 or 1008: _faulted = false; break; }
-                        Print(this.name, $"The socket to {WSS_HOST} was terminated. (State: {(int?)socketResult.CloseStatus ?? 1006})", PrintSeverity.Warn);
+                        Print(name, $"The socket to {WSS_HOST} was terminated. (State: {(int?)socketResult.CloseStatus ?? 1006})", PrintSeverity.Warn);
                         break;
-                    } else {
-                        if (socket.State != WebSocketState.Open) break;
                     }
                 }
 
                 /// This is a Normal closure block.
                 if (Cancellation.IsCancellationRequested) {
-                    if (socket.State == WebSocketState.Open) { if (DEBUGGING_ENABLED) Print($"{this.name}:Reader", $"Sent goodbye message to the socket.", PrintSeverity.Debug); await socket.CloseAsync(WebSocketCloseStatus.NormalClosure, "FaretheWell", default); }
+                    if (socket.State == WebSocketState.Open) { Print(name, $"Sent goodbye message to the socket.", PrintSeverity.Debug); await socket.CloseAsync(WebSocketCloseStatus.NormalClosure, "FaretheWell", default); }
                     _faulted = false;
-                    if (DEBUGGING_ENABLED) Print($"{this.name}:Reader", $"Socket to {WSS_HOST} closed. (Normal Closure)", PrintSeverity.Debug);
-                    Print(this.name, $"Socket to {WSS_HOST} successfully closed.", PrintSeverity.Normal);
+                    Print(name, $"Socket to {WSS_HOST} closed. (Normal Closure)", PrintSeverity.Normal);
                 }
-            } catch (System.Net.WebSockets.WebSocketException wsp) {
-                new BotException($"{this.name}:Reader", $"Connection to {WSS_HOST} was unexpectedly reset.", wsp);
-                //Print(this.name, $"WebsocketException - General Failure. Connection to {WSS_HOST} was reset", PrintSeverity.Error); //a massive loop was thrown into chaos here. I do not understand how it got into a Loop {} but once it was handled in Logger it stopped. Loop{} in ClientWebsocket class? it was a `System.Net.Sockets.SocketException` that snowballed it.
+            } catch (System.Net.WebSockets.WebSocketException) {
+                new BotException(name, $"Connection to {WSS_HOST} was lost. (State: {(int?)socket!.CloseStatus ?? 1006}, Thread: {Environment.CurrentManagedThreadId})");
             } catch (Exception ex) {
-                new BotException($"{this.name}:Reader", "Unhandled Exception", ex);
+                new BotException(name, $"Unhandled Exception (Thread: {Environment.CurrentManagedThreadId})", ex);
             } finally {
+                /// This can probably be removed now, I was just making sure that there was a weird state which required resetting the socket.
+                //_ = Logger.LogAsync(name, new string[] { $"Socket Closed. Additional Information :: State: {socket!.State}", $" | CloseStatus: {(int?)socket.CloseStatus ?? 1006} | _faulted: {_faulted} | _cancelled: {Cancellation.IsCancellationRequested} | connected: {_connected} | connecting: {_connecting} | reconnecting: {_reconnecting}" });
                 if(!Cancellation.IsCancellationRequested && !_faulted) {
-                    if (DEBUGGING_ENABLED) Print($"{this.name}:Reader", $"Abnormal closure detected. (State: {(int?)socket.CloseStatus ?? 1006})", PrintSeverity.Debug);
+                    Print(name, $"Abnormal closure detected. (State: {(int?)socket!.CloseStatus ?? 1006})", PrintSeverity.Debug);
                 }
                 _connected = false;
-                Cancellation.Cancel();
+                Interlocked.Exchange(ref _connecting, 0);
 
-                await Task.Delay(369);
                 if (_faulted) {
-                    if (DEBUGGING_ENABLED) Print($"{this.name}:Reader", $"Socket fault detected. Reconnection will be attempted to restore the connection.", PrintSeverity.Debug);
+                    //await Task.Delay(120);
+                    Print(name, $"Socket fault detected. Reconnection will be attempted to restore the connection.", PrintSeverity.Debug);
                     _ = Reconnect();
                 }
             }
-        }
+        }*/
 
         #region JSONClass
 
         #region Presence
         public class PresenceMessage
         {
-            public string id { get; set; }
-            public string @event { get; set; }
-            public string type { get; set; }
-            public string text { get; set; }
-            public string channelId { get; set; }
-            public DateTime createdAt { get; set; }
+            public required string id { get; set; }
+            public required string @event { get; set; }
+            public required string type { get; set; }
+            public string? text { get; set; }
+            public required string channelId { get; set; }
+            public required DateTime createdAt { get; set; }
         }
 
         public class RootPresenceEvent
         {
-            public string identifier { get; set; }
-            public PresenceMessage message { get; set; }
+            public required string identifier { get; set; }
+            public required PresenceMessage message { get; set; }
         }
         #endregion
 
         #region StreamEvents
         public class RootStreamEvents
         {
-            public string identifier { get; set; }
-            public Message message { get; set; }
+            public required string identifier { get; set; }
+            public required Message message { get; set; }
         }
 
         public class Message
         {
-            public string id { get; set; }
-            public string @event { get; set; }
-            public string type { get; set; }
-            public string text { get; set; }
-            public string metadata { get; set; }
-            public DateTime createdAt { get; set; }
-            public string channelId { get; set; }
+            public required string id { get; set; }
+            public required string @event { get; set; }
+            public required string type { get; set; }
+            public string? text { get; set; }
+            //private MetadataObject _metadata { get; set; }
+            //public string? metadata { get; set; }
+            public required DateTime createdAt { get; set; }
+            public required string channelId { get; set; }
+
+
+            private MetadataObject? _metadata;
+            private string? _string_meta_data;
+
+            public MetadataObject Metadata => _metadata!;
+            [JsonPropertyName("metadata")]
+            public string raw_metadata {
+                get => _string_meta_data ?? string.Empty;
+                set {
+                    _string_meta_data = value;
+                    _metadata = JsonSerializer.Deserialize<MetadataObject>(_string_meta_data);
+                }
+            }
 
             /// <summary>
             /// [JsonIgnore] WHAT THE FUCK 
             /// </summary>
-            public MetadataObject metadataObject => JsonSerializer.Deserialize<MetadataObject>(metadata);
+            //public MetadataObject metadataObject => JsonSerializer.Deserialize<MetadataObject>(metadata);
         }
 
         public class MetadataObject
         {
-            public string who { get; set; }
-            public string what { get; set; }
+            public string? who { get; set; }
+            public string? what { get; set; }
             [JsonPropertyName("how_much")]
             public int? howMuch { get; set; }
             [JsonPropertyName("tip_menu_item")]
-            public string tipMenuItem { get; set; }
-            public string prize { get; set; }
+            public string? tipMenuItem { get; set; }
+            public string? prize { get; set; }
             [JsonPropertyName("number_of_viewers")]
-            public int? numberOfViewers { get; set; }
+            public int? viewerCount { get; set; }
         }
         #endregion
 
@@ -681,85 +768,87 @@ namespace ShimamuraBot
         public class RootMessageEvent
         {
             [JsonPropertyName("identifier")]
-            public string identifier { get; set; }
+            public required string identifier { get; set; }
 
             [JsonPropertyName("message")]
-            public ChatMessage message { get; set; }
+            public required ChatMessage message { get; set; }
         }
 
         public class ChatMessage
         {
             [JsonPropertyName("event")]
-            public string @event { get; set; }
+            public required string @event { get; set; }
 
             [JsonPropertyName("createdAt")]
-            public DateTime createdAt { get; set; }
+            public required DateTime createdAt { get; set; }
 
             [JsonPropertyName("messageId")]
-            public string messageId { get; set; }
+            public required string messageId { get; set; }
 
             [JsonPropertyName("type")]
-            public string type { get; set; }
+            public required string type { get; set; }
 
             [JsonPropertyName("visibility")]
-            public string visibility { get; set; }
+            public required string visibility { get; set; }
 
             [JsonPropertyName("text")]
-            public string text { get; set; }
+            public required string text { get; set; }
 
             [JsonPropertyName("botCommand")]
-            public string botCommand { get; set; }
+            public string? botCommand { get; set; }
 
             [JsonPropertyName("botCommandArg")]
-            public string botCommandArg { get; set; }
+            public string? botCommandArg { get; set; }
 
             [JsonPropertyName("emotesUsed")]
-            public List<object> emotesUsed { get; set; }
+            public List<object>? emotesUsed { get; set; }
 
             [JsonPropertyName("author")]
-            public ChatUser author { get; set; }
+            public required ChatUser author { get; set; }
 
             [JsonPropertyName("streamer")]
-            public ChatUser streamer { get; set; }
+            public required ChatUser streamer { get; set; }
 
             [JsonPropertyName("channelId")]
-            public string channelId { get; set; }
+            public required string channelId { get; set; }
 
             [JsonPropertyName("mention")]
-            public bool mention { get; set; }
+            public required bool mention { get; set; }
 
             [JsonPropertyName("mentionedUsername")]
-            public string mentionedUsername { get; set; }
+            public string? mentionedUsername { get; set; }
+            [JsonPropertyName("highlight")]
+            public required bool Highlighted { get; set; }
         }
 
         public class ChatUser
         {
             [JsonPropertyName("slug")]
-            public string slug { get; set; }
+            public required string slug { get; set; }
 
             [JsonPropertyName("username")]
-            public string username { get; set; }
+            public required string username { get; set; }
 
             [JsonPropertyName("usernameColor")]
-            public object usernameColor { get; set; }
+            public object? usernameColor { get; set; }
 
             [JsonPropertyName("displayNameWithFlair")]
-            public string displayNameWithFlair { get; set; }
+            public string? displayNameWithFlair { get; set; }
 
             [JsonPropertyName("signedPhotoUrl")]
-            public string signedPhotoUrl { get; set; }
+            public string? signedPhotoUrl { get; set; }
 
             [JsonPropertyName("signedPhotoThumbUrl")]
-            public string signedPhotoThumbUrl { get; set; }
+            public string? signedPhotoThumbUrl { get; set; }
 
             [JsonPropertyName("isStreamer")]
-            public bool isStreamer { get; set; }
+            public bool? isStreamer { get; set; }
 
             [JsonPropertyName("isModerator")]
-            public bool isModerator { get; set; }
+            public bool? isModerator { get; set; }
 
             [JsonPropertyName("isSubscriber")]
-            public bool isSubscriber { get; set; }
+            public bool? isSubscriber { get; set; }
         }
         #endregion
 
