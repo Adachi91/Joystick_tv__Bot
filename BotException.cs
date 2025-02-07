@@ -7,9 +7,7 @@ using System.Diagnostics.CodeAnalysis;
 
 namespace ShimamuraBot
 {
-    // new BotExceptions are GC'd so it's okay to call them as such.
-    internal class BotException : Exception
-    {
+    internal class BotException : Exception {
         /// <summary>
         ///  Send error message to the buffer
         /// </summary>
@@ -24,8 +22,10 @@ namespace ShimamuraBot
         /// </summary>
         /// <param name="sender">Origins</param>
         /// <param name="msg">Message</param>
-        /// <param name="inner">Exception exception</param>
+        /// <param name="inner"><see cref="Exception"/> exception</param>
         public BotException(string sender, string msg, Exception inner) : base(msg, inner) {
+            if (inner.GetType().Name == "BotException") return;
+
             Print(sender, $"{msg}. InnerException: {inner}", PrintSeverity.Error);
         }
 
