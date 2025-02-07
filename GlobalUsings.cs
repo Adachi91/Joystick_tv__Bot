@@ -5,3 +5,5 @@ global using static ShimamuraBot.Config;
 global using static ShimamuraBot.Modules.GamesHandler;
 global using static ShimamuraBot.Modules.ModuleLoader;
 global using static ShimamuraBot.Classes.JsonExtension;
+global using static ShimamuraBot.Classes.Fuck_Your_Enums;
+global using static ShimamuraBot.Classes.Emoticonicals;
