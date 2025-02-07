@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Net.Sockets;
 using System.Text;
+using System.Text.Json.Serialization;
 using System.Threading.Tasks;
 
 namespace ShimamuraBot.Classes {
@@ -55,6 +56,11 @@ namespace ShimamuraBot.Classes {
             _channel_name = "Adachi91";
         }
 
+        class Config {
+            record OAuth(string host, string client_id, string client_secret, string authorize_uri, string token_uri, string redirect_uri, string scope, string response_type = "code", AuthTypes auth = AuthTypes.None, Service service = Service.Twitch);
+            record WebSocketConfig(string endpoint, string token, string channelId, Service service = Service.Twitch); // WiP
+        }
+
         public async Task<bool> ConnectAsync() {
             var name = $"{this.name}:TcpClient";
 
@@ -64,7 +70,6 @@ namespace ShimamuraBot.Classes {
                 await _client.ConnectAsync(_irc_endpoint, 6697);
                 return true;
             }
-            catch (BotException) { /* recursive prevention */ }
             catch (SocketException sEx) { new BotException(name, $"A socket exception has occured while connecting to {_irc_endpoint}", sEx); }
             catch (Exception ex) { new BotException(name, $"Could not connect to {_irc_endpoint}.", ex); }
 
@@ -80,7 +85,6 @@ namespace ShimamuraBot.Classes {
                 Print(this.name, $"The connect to {_irc_endpoint} has closed successfulewlj", PrintSeverity.Debug);
                 return true;
             }
-            catch (BotException) { }
             catch (Exception ex) {
                 new BotException(this.name, "Unable to manipulate client state.", ex);
             }
@@ -94,7 +98,7 @@ namespace ShimamuraBot.Classes {
             return true;
         }
 
-        public async void blah() {
+        public async Task blah() {
             using (var client = new TcpClient()) {
                 await client.ConnectAsync(_irc_endpoint, 6697);
                 using (var stream = client.GetStream())
@@ -137,8 +141,130 @@ namespace ShimamuraBot.Classes {
         }
 
 
-        //public class WebSocket {
-            //wheatwat do they even use websockets topkek
-        //}
+        /// <summary>
+        ///  Strong-typed name class.<br />
+        ///  Deserialize here.
+        ///  
+        /// <para>Usage TwitchMessage T -Fucking brackets.</para>
+        /// </summary>
+        public class WebSocket {
+            #region WebSocket_Responses
+            public class TwitchMessage<T> {
+                [JsonPropertyName("metadata")]
+                public Metadata Metadata { get; set; } = new();
+
+                [JsonPropertyName("payload")]
+                public T Payload { get; set; } = default!;
+            }
+
+            public class Metadata {
+                [JsonPropertyName("message_id")]
+                public string MessageId { get; set; } = string.Empty;
+
+                [JsonPropertyName("message_type")]
+                public string MessageType { get; set; } = string.Empty;
+
+                [JsonPropertyName("message_timestamp")]
+                public DateTime MessageTimestamp { get; set; }
+            }
+
+            public class SessionWelcome {
+                [JsonPropertyName("session")]
+                public SessionInfo Session { get; set; } = new();
+            }
+
+            public class SessionInfo {
+                [JsonPropertyName("id")]
+                public string Id { get; set; } = string.Empty;
+
+                [JsonPropertyName("status")]
+                public string Status { get; set; } = string.Empty;
+
+                [JsonPropertyName("keepalive_timeout_seconds")]
+                public int KeepAliveTimeoutSeconds { get; set; }
+            }
+
+            public class SessionKeepAlive { }
+
+            public class SessionReconnect {
+                [JsonPropertyName("session")]
+                public ReconnectInfo Session { get; set; } = new();
+            }
+
+            public class ReconnectInfo {
+                [JsonPropertyName("id")]
+                public string Id { get; set; } = string.Empty;
+
+                [JsonPropertyName("status")]
+                public string Status { get; set; } = string.Empty;
+            }
+
+            public class SubscriptionEvent<T> {
+                [JsonPropertyName("subscription")]
+                public SubscriptionInfo Subscription { get; set; } = new();
+
+                [JsonPropertyName("event")]
+                public T Event { get; set; } = default!;
+            }
+
+            public class SubscriptionInfo {
+                [JsonPropertyName("id")]
+                public string Id { get; set; } = string.Empty;
+
+                [JsonPropertyName("status")]
+                public string Status { get; set; } = string.Empty;
+
+                [JsonPropertyName("type")]
+                public string Type { get; set; } = string.Empty;
+
+                [JsonPropertyName("version")]
+                public string Version { get; set; } = string.Empty;
+            }
+
+            public class ChannelFollow {
+                [JsonPropertyName("user_id")]
+                public string UserId { get; set; } = string.Empty;
+
+                [JsonPropertyName("user_name")]
+                public string UserName { get; set; } = string.Empty;
+
+                [JsonPropertyName("broadcaster_user_id")]
+                public string BroadcasterUserId { get; set; } = string.Empty;
+            }
+
+            public class ChannelSubscribe {
+                [JsonPropertyName("user_id")]
+                public string UserId { get; set; } = string.Empty;
+
+                [JsonPropertyName("user_name")]
+                public string UserName { get; set; } = string.Empty;
+
+                [JsonPropertyName("broadcaster_user_id")]
+                public string BroadcasterUserId { get; set; } = string.Empty;
+            }
+
+            public class ChannelCheer {
+                [JsonPropertyName("user_id")]
+                public string UserId { get; set; } = string.Empty;
+
+                [JsonPropertyName("user_name")]
+                public string UserName { get; set; } = string.Empty;
+
+                [JsonPropertyName("bits")]
+                public int Bits { get; set; }
+            }
+
+            public class ChannelRaid {
+                [JsonPropertyName("from_broadcaster_user_id")]
+                public string FromBroadcasterUserId { get; set; } = string.Empty;
+
+                [JsonPropertyName("to_broadcaster_user_id")]
+                public string ToBroadcasterUserId { get; set; } = string.Empty;
+
+                [JsonPropertyName("viewers")]
+                public int Viewers { get; set; }
+            }
+            #endregion
+        }
     }
 }
