@@ -71,6 +71,106 @@ namespace ShimamuraBot
         private ClientWebSocket? socket;
         private CancellationTokenSource? Cancellation = new CancellationTokenSource();
 
+        #region New attempt
+        private readonly T _g_service; // Joystick.WebSocket 
+        private CancellationTokenSource _cts;
+        /// <summary>I just really want to play BG3 ...................................................................................................</summary>
+
+        public WebsocketClient(T Service, string endpoint, string auth, CancellationTokenSource cts) { // fukin block. I .... nothingness
+            // okay, what now dumbass, we have methods, but what next
+            _g_service = Service;
+            _wss_endpoint = new Uri(endpoint); // THIS RIGHT HERE attach no fuck, maybe, no fuck, logging FUCK FUCKF fuck ffuck fuckity fuck
+            _cts = cts;
+
+
+            Service.RegisterSend(Send); // this allows me to invoke Send, but not socket context, starting and stopping......
+            Service.RegisterConnectAsync(ConnectAsyncCC);
+            Service.RegisterCloseAsync(CloseAsyncCC);
+            // I need endpoint
+            // I need credneitals.
+        }
+
+        public async Task<bool> Send(string msg) {
+            // DONT FUCKING WORRY ABOUT IT
+            bool LICKATACO = true;
+
+            return LICKATACO;
+        }
+
+        public async Task<bool> CloseAsyncCC() {
+            bool LICKATACO = true;
+
+            return LICKATACO;
+        }
+
+        public async Task<bool> ConnectAsyncCC() {
+            bool LICKATACO = true;
+            return LICKATACO;
+        }
+
+        private async Task WebSocket_ReaderV3() { // IDFC the naming is coming back -> 2 -> 1.3 -> 3 See now it works
+            if(Volatile.Read(ref _connecting) != 1) { return; } //////////////ehhhhhhhhhhhhhhhhhhhhhh ?!
+            string name = $"{this.name}:ReaderV1.3";
+            Print(name, $"Starting the WebSocket Reader. (Thread: {Environment.CurrentManagedThreadId})", PrintSeverity.Debug);
+
+            try {
+                await socket.ConnectAsync(_wss_endpoint, _cts.Token); // fuck your null reference you don't even get a 
+                _connected = true;
+                _faulted = true;
+
+                // This allows for a 20% buffer overhead for the WORST case scenario a bot can send 580 characters * 3 (if all 3 byte characters).
+                byte[] buffer = new byte[8192];
+
+                WebSocketReceiveResult socketReceive;
+
+                //Websocket Reader Loop
+                while (socket.State == WebSocketState.Open) {
+                    socketReceive = await socket.ReceiveAsync(buffer, _cts.Token); //default is intentional - byte[] can be implicitly converted to ArraySegment<byte> without explicitly wrapping new ArraySegment<byte>, not really documented
+
+
+                    if (socketReceive.MessageType == WebSocketMessageType.Text) {
+                        _ = _g_service.Receive(Encoding.UTF8.GetString(buffer, 0, socketReceive.Count)); // blah blah concurrentqueue or some shit
+                        //continue;
+                    } else if (socketReceive.MessageType == WebSocketMessageType.Close) {
+                        switch ((int?)socketReceive.CloseStatus) {
+                            case 1000: Print(name, $"Socket to {_g_service.Internal_Host} closed. (Normal Closure)", PrintSeverity.Normal); _faulted = false; return;
+                            case 1002 or 1007 or 1008: _faulted = false; break;
+                        }
+                        Print(name, $"The socket to {_g_service.Internal_Host} was terminated. (State: {(int?)socketReceive.CloseStatus ?? 1006})", PrintSeverity.Warn);
+                        break;
+                    }
+
+                    _cts.Token.ThrowIfCancellationRequested(); // According to microsofts this is much faster and less overhead than IsCancellationRequested. https://medium.com/@mitesh_shah/a-deep-dive-into-c-s-cancellationtoken-44bc7664555f
+                }
+            } catch (OperationCanceledException) {
+
+            } catch (System.Net.WebSockets.WebSocketException) {
+                new BotException(name, $"Connection to {WSS_HOST} was lost. (State: {(int?)socket!.CloseStatus ?? 1006}, Thread: {Environment.CurrentManagedThreadId})");
+            } catch (Exception ex) {
+                new BotException(name, $"Unhandled Exception (Thread: {Environment.CurrentManagedThreadId})", ex);
+            } finally {
+                _connected = false;
+                Interlocked.Exchange(ref _connecting, 0);
+
+                if (_faulted) {
+                    Print(name, $"Socket fault detected. Reconnection will be attempted to restore the connection.", PrintSeverity.Debug);
+                    _ = Reconnect();
+                }
+            }
+
+            _ = _g_service.Disconnect(true);
+        }
+
+
+
+
+
+
+
+
+
+
+        #endregion
 
 
 
@@ -138,7 +238,7 @@ namespace ShimamuraBot
             if (Interlocked.CompareExchange(ref _connecting, 0, 0) == 1 || _connected) { Print($"{this.name}:Connect", $"Socket is already in use. (Connected: {_connected}, Connecting: {_connecting}, Thread: {Environment.CurrentManagedThreadId})", PrintSeverity.Warn); return false; }
             Interlocked.Exchange(ref _connecting, 1);
 
-            if (!reconnect && Connectivity.NoPing()) {
+            if (!reconnect && Connectivity.NoPing()) { // This is fine until you adjust to Ping change, it will attempt multiple times.
                 Print($"{this.name}:Connect", $"Unable to detect internet connectivity.", PrintSeverity.Error);
                 Interlocked.Exchange(ref _connecting, 0);
                 return false;
