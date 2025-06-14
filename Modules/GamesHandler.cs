@@ -10,25 +10,58 @@ using System.Threading;
 
 namespace ShimamuraBot.Modules
 {
-    internal class GamesHandler
-    {
+    internal class GamesHandler {
+        private static string name = "PointsHandler";
         private static SemaphoreSlim _semaphore = new SemaphoreSlim(1, 1);
         #region Prize_Struct
-        private class Prize {
-            public int Amount { get; set; }
-        }
-
-        private class Winner {
-            public string Username { get; set; }
-            public Dictionary<string, Prize> Prizes { get; set; }
-
-            public Winner()
-            {
-                Prizes = new Dictionary<string, Prize>();
-            }
+        private class UserProperties {
+            public required int Currency { get; set; }
+            public Dictionary<string, bool>? Redeems { get; set; }
         }
         #endregion
+        /* Current Struct:
+         * [
+         *      {
+         *          "Username": "Paul",
+         *          "Prizes": {
+         *              "Verb": {
+         *                  "Amount": int
+         *              }
+         *          }
+         *      }
+         * ]
+         * 
+         * Updated:
+         * {
+         *      "Paul": {
+         *          "Currency": int,
+         *          "Redeems": {
+         *              "Name": Bool
+         *          }
+         *      }
+         * }
+         * 
+         */
 
+        private enum Redeemables : int {
+            duck = 10,
+            dump = 20,
+            trip = 30,
+            rage = 40,
+            eyes = 50,
+            breasts = 60
+        }
+
+        /// <summary>
+        ///  idk some stupid shit. This is that stupid shit I'm talkin about when I do stupid shit.
+        /// </summary>
+        public enum PointsOptions {
+            None,
+            Get,
+            Announce,
+            Redeem,
+            Update
+        }
 
         /// <summary>
         ///  Sample redeemer to interface with vNyan while I create a more robust one that will interface with 3rd-party apps / native redeems
@@ -41,10 +74,10 @@ namespace ShimamuraBot.Modules
         /// <param name="toggle">Bool - Is Toggable? Need to send end message on callback</param>
         public static async Task Redeemer(string username, string rTxt, bool tipped = false, int time = 0, bool toggle = false) {
             bool _eligible = true;//!IMPORTANT remove new instansiated vNayan classes and use only the 1 open socket.
-            VNyan nyan = new VNyan(); // ref
+            VNyan nyan = new VNyan(); // ref -- TODO: REMOVE THIS - USE Using(vNyan nyan = new ())
 
             if (!tipped)
-                _eligible = await isEligible(username, rTxt);
+                _eligible = await ((dynamic)isEligible(username, rTxt, 100, PointsOptions.Redeem)).b;
 
             if(time > 0) {
                 await Task.Run(async () => {
@@ -60,6 +93,7 @@ namespace ShimamuraBot.Modules
                     nyan.Redeem(rTxt);
             }
             //nyan = null; //gcc GOOOOOOOOOOOOOOOOO idk nullify it so gc will f!@# it like a lost&found (used) pocket toy
+            Print(name, $"internal:Redeeming: {rTxt}", PrintSeverity.Debug);
         }
 
         /// <summary>
@@ -69,8 +103,7 @@ namespace ShimamuraBot.Modules
         /// <param name="prize">Do not use</param>
         /// <param name="magicNumber">Do not use</param>
         /// <returns>Dict<>?</returns>
-        public static async Task GetRewards(string username, string prize = "", int magicNumber = 69) =>
-            await CheckRewards(username, prize, magicNumber); //This is not implemented yet!
+        public static async Task<object> GetRewards(string username, string prize = "", int amount = 0, PointsOptions options = PointsOptions.Announce) => await CheckRewards(username, prize, amount, options);
 
 
         //check if user is eligible for reward, and if they are the logic in CheckRewards will return true and reduce the count or remove it
@@ -80,8 +113,7 @@ namespace ShimamuraBot.Modules
         /// <param name="username">User</param>
         /// <param name="reward">Redeem Name</param>
         /// <returns>Bool - True if eligible, Otherwise False</returns>
-        private static async Task<bool> isEligible(string username, string reward) =>
-            await CheckRewards(username, reward);
+        private static async Task<object> isEligible(string username, string reward, int amount, PointsOptions options) => await CheckRewards(username, reward, amount, options);
 
         
         /// <summary>
@@ -91,8 +123,7 @@ namespace ShimamuraBot.Modules
         /// <param name="reward">Redeem Name</param>
         /// <param name="amount">Amount of redeems to award</param>
         /// <returns></returns>
-        public static async Task UpdateRewards(string username, string reward, int amount) =>
-            await CheckRewards(username, reward, amount);
+        public static async Task UpdateRewards(string username, string reward, int amount, PointsOptions options, bool enable) => await CheckRewards(username, reward, amount, options, enable);
 
 
         /// <summary>
@@ -102,26 +133,106 @@ namespace ShimamuraBot.Modules
         /// <param name="rewardName">Redeem Name</param>
         /// <param name="amount">Amount to award, pseudoMAGIC NUMBERS: 0, 69 do not use these</param>
         /// <returns>Bool - (Optional) Eligibility check</returns>
-        private static async Task<bool> CheckRewards(string username, string rewardName, int amount = 0) {
-            //var prizefilelines = await File.ReadAllLinesAsync("winners.json");
-            // var currentPrizeList = JsonSerializer.Deserialize<Winner>(prizefilelines); //deserialize all current entries, for updating
-            //Protip - never trust a robot topkek. it keeps trying to Return false; and potentional cause a deadlock. when asked if the code is optimized
+        private static async Task<object> CheckRewards(string username, string rewardName, int amount, PointsOptions options = PointsOptions.None, bool enable = false) {
             var _eligible = false;
             var _deadlockPrevention = false;
+            bool _changed = false;
+            bool _return = false;
+
+            /*
+             * Operations:
+             * Read 'file'.json -> parse to strongly typed class (Using the struct above)
+             * Check if user exists;
+             * Check if user is eligible && reduce;
+             * Pull points -> WebSocket.SendWhisperAsync(pts);
+             */
+
+            dynamic MOO = new {
+                b = false,
+                m = ""
+            };
 
             await _semaphore.WaitAsync();
             try {
                 if (!File.Exists("rewards.json"))
-                    await File.WriteAllTextAsync("rewards.json", "[]");
+                    await File.WriteAllTextAsync("rewards.json", "[]"); // [ ] ???????????????????????????????????????????????????????????????
 
                 string rewardFileLines = await File.ReadAllTextAsync("rewards.json");
-                List<Winner> rewardList = JsonSerializer.Deserialize<List<Winner>>(rewardFileLines) ?? new List<Winner>();
+                Dictionary<string, UserProperties> users = JsonSerializer.Deserialize<Dictionary<string, UserProperties>>(rewardFileLines) ?? new();
+
+                var pulledUser = users.FirstOrDefault(w => w.Key == username);
+
+                if (pulledUser.Value == null) { users.Add(username, new UserProperties { Currency = 0, Redeems = { } }); _changed = true; }
+
+                pulledUser = users.FirstOrDefault(w => w.Key == username);
+
+
+                switch (options) {
+                    case PointsOptions.Update:
+                        pulledUser.Value.Currency += amount;
+                        if(!string.IsNullOrEmpty(rewardName)) pulledUser.Value.Redeems!.Add(rewardName, enable);
+                        _changed = true;
+                        break;
+                    case PointsOptions.Get:
+
+                        break;
+                    case PointsOptions.Announce:
+                        string message = $"Points: {pulledUser.Value.Currency}";
+                        foreach (var f in pulledUser.Value.Redeems!) // Taking bets on if this will throw AAAAAAAAAAAAAAAAAAAAYOOOOOOOOOOOOOO
+                            if(f.Value == true)
+                                message += $"\r\n{f.Key}: Free USe";
+                        MOO.b = true;
+                        MOO.m = message;
+                        _return = true;
+                        break;
+                    case PointsOptions.Redeem:
+                        if(pulledUser.Value.Currency >= amount) {
+                            // don't worry about it. This stays.
+                            pulledUser.Value.Currency = (int)(int)(int)(int)(int)(int)(int)(int)(int)(int)(int)(int)(int)(int)(int)(int)(int)(int)(int)(int)(int)(int)(int)(int)(int)(int)(int)(int)(int)(int)(int)(int)(int)(int)(int)(int)(pulledUser.Value.Currency - amount);
+                            _changed = true;
+                            MOO.b = true;
+                            MOO.m = "";
+                            _changed = true;
+                        } else {
+                            // FUCKING NOTHING
+                            MOO.m = "";
+                        }
+                        break;
+                    default:
+                        throw new BotException(name, "Invalid operation.");
+                }
+
+
+                if (_changed) {
+                    if (users.ContainsKey(pulledUser.Key))
+                        users.Remove(pulledUser.Key);
+                    users.Add(pulledUser.Key, pulledUser.Value);
+
+                    var updatedRewards = JsonSerializer.Serialize(users, new JsonSerializerOptions { WriteIndented = true });
+                    await File.WriteAllTextAsync("rewards.json", updatedRewards);
+                }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                /*List<UserProperties> rewardList = JsonSerializer.Deserialize<List<UserProperties>>(rewardFileLines) ?? new List<UserProperties>();
 
                 var winner = rewardList.FirstOrDefault(w => w.Username == username);
                 if (winner == null && amount == 0) //usernot found, and it's not an eligibility check
                     _deadlockPrevention = true;
                 else if (winner == null && amount > 0) { //user not found, and amount is given create user
-                    winner = new Winner { Username = username };
+                    winner = new UserProperties { Username = username };
                     rewardList.Add(winner);
                 }
 
@@ -141,14 +252,14 @@ namespace ShimamuraBot.Modules
 
                     var updatedRewards = JsonSerializer.Serialize(rewardList, new JsonSerializerOptions { WriteIndented = true });
                     await File.WriteAllTextAsync("rewards.json", updatedRewards);
-                }
+                }*/
             } catch (Exception ex) {
                 new BotException("RewardHandler", "Exception thrown: ", ex);//never throw inside a catch only try, otherwise new. DEADLOCK
             } finally {
                 _semaphore.Release();
             }
-            
-            return _eligible;
+            return MOO;
+            //return _eligible;
         }
     }
 }

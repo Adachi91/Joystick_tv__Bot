@@ -1,4 +1,5 @@
-﻿using System;
+﻿using ShimamuraBot.Classes;
+using System;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -56,11 +57,11 @@ namespace ShimamuraBot
             /// </summary>
             /// <returns>Bool - Success</returns>
             public static async Task<bool> Token() {
-                if (DEBUGGING_ENABLED) Print(name, $"Attempting to parse web token.", PrintSeverity.Debug);
-                if (string.IsNullOrEmpty(ACCESS_TOKEN)) { if (DEBUGGING_ENABLED) Print(name, $"ACCESS_TOKEN IS EMPTY", PrintSeverity.Debug); return false; } // Short-Circuit - OAuth flow needs to happen, no token is held.
+                //if (DEBUGGING_ENABLED) Print(name, $"Attempting to parse web token.", PrintSeverity.Debug);
+                if (string.IsNullOrEmpty(ACCESS_TOKEN)) { Print(name, $"ACCESS_TOKEN IS EMPTY", PrintSeverity.Debug); return false; } // Short-Circuit - OAuth flow needs to happen, no token is held.
 
                 
-                try { await JWT.Parse(ACCESS_TOKEN); if (DEBUGGING_ENABLED) Print(name, $"Web Token succesfully stored.", PrintSeverity.Debug); return true; } catch { return false; }
+                try { await JWT.Parse(ACCESS_TOKEN); /*Print(name, $"Web Token succesfully stored.", PrintSeverity.Debug);*/ return true; } catch { return false; }
             }
 
             public static int? GetExpiration => _WebObject != null ? _WebObject.expiry : null;
@@ -101,7 +102,7 @@ namespace ShimamuraBot
         #endregion
 
         #region Print Functionality
-        private static SemaphoreSlim STOPEATINGSHIT = new(1, 1);
+        private static SemaphoreSlim Spit_in_my_mouth = new(1, 1);
 
         private static object formatPrint(string sender, string txt, PrintSeverity lvl) //TODO: Start random text strings to make sure it can handle []: tagging like "Hi [where] Are you [rom you there?"
         {
@@ -117,23 +118,15 @@ namespace ShimamuraBot
             return holder;
         }
 
-        public enum PrintSeverity : short {
-            Debug = 0,
-            Normal = 1,
-            None = 1,
-            Warn = 2,
-            Error = 3,
-            Chat = 4
-        }
 
         /// <summary>
         /// Why? because I'm nuts, and I like lua, so fuck me, no fuck you, idk could be enjoyable. Also fuck that one mother fucker on github for saying that Vulva is a profane word, you fucking moron. What? I can go on rants inside method descriptors.
         /// </summary>
-        /// <param name="sender"><see cref="string"/> The sender name.<para>Usage:<br />Sender,<br />Chat - Chat Format,<br />NT - No Tag, <b>with</b> DateTime<br />string.empty - No Tag, <b>No</b> DateTime</para></param>
+        /// <param name="sender"><see cref="string"/> The sender name.<para>Usage:<br />Var Sender,<br />"Chat" - <u>User: Msg</u>,<br />"NT" - No Tag, <b>with</b> DateTime<br />string.Empty - No Tag, or DateTime</para></param>
         /// <param name="text"><see cref="string"/> Message body</param>
         /// <param name="level"><see cref="PrintSeverity"/> Error level.</param>
         public static void Print(string sender, string text, PrintSeverity level) { //https://en.wikipedia.org/wiki/ANSI_escape_code
-            STOPEATINGSHIT.Wait(); // Stop eating CHARACTERS.
+            Spit_in_my_mouth.Wait(); // Stop eating CHARACTERS.
             ConsoleColor current = Console.ForegroundColor;
             ConsoleColor debug = ConsoleColor.Cyan;
             ConsoleColor warn = ConsoleColor.Yellow;
@@ -147,7 +140,7 @@ namespace ShimamuraBot
                     //#if DEBUG
                     if (!DEBUGGING_ENABLED) break;
                     Console.ForegroundColor = debug; Console.Write($" {ctx.Name}"); Console.ForegroundColor = current; Console.Write($"{ctx.Message}{Environment.NewLine}");
-                    _ = Logger.Log("Debug", new string[] { $"[Component:{sender}]:", $"{ctx.Message}" });
+                    _ = Logger.LogAsync("Debug", new string[] { $"[Component:{sender}]:", $"{ctx.Message}" });
                     //#endif
                     break;
                 case 1: /*int cl = Console.WindowWidth - ($" {ctx.Name}{ctx.Message}").Length;*/ Console.WriteLine($" {ctx.Name}{ctx.Message}" /*+ (cl > 0 ? new string(' ', cl) : "")*/);  //if (cl > 0) Console.Write(new string('|', cl));
@@ -157,7 +150,7 @@ namespace ShimamuraBot
                 case 3: /*Console.Write($" \x1B[38;5;9m[ERROR]{ctx[0]}: {ctx[1]}\x1B[38;5;15m{Environment.NewLine}"); test to switch to ANSI escape, good idea? great? or horrible.. */
                     Console.ForegroundColor = error; Console.Write($" {ctx.Name}"); Console.ForegroundColor = current; Console.Write($"{ctx.Message}{Environment.NewLine}");
                     if (sender != "Logger") // Prevent recursion. BotException -> Print(Error) -> Logger -> BotException -> Print(Error) -> Logger
-                        _ = Logger.Log("ERROR", new string[] { $"[Component:{sender}]:", $"{ctx.Message}" });
+                        _ = Logger.LogAsync("ERROR", new string[] { $"[Component:{sender}]:", $"{ctx.Message}" });
                     break;
                 default: Console.WriteLine($"I don't even want to know. Offender: {sender}");
                     break;
@@ -167,8 +160,8 @@ namespace ShimamuraBot
             /// https://learn.microsoft.com/en-us/windows/console/console-virtual-terminal-sequences
 
             //Console.Write($">{UserInput.ToString()}");
-            Console.Write($"{USERNAME ?? "$"}>");
-            STOPEATINGSHIT.Release();
+            Console.Write($"{USERNAME ?? "$"}> ");
+            Spit_in_my_mouth.Release();
         }
         #endregion
 

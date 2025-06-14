@@ -57,7 +57,6 @@ namespace ShimamuraBot
         private bool _connected = false;
 
         private Uri _wss_endpoint { get; set; }
-        private Service _service { get; set; }
         private string channelId { get; set; } = string.Empty;
         private bool _faulted { get; set; } = false;
         private Stopwatch _cooldown { get; set; } = new();
@@ -72,13 +71,13 @@ namespace ShimamuraBot
         private CancellationTokenSource? Cancellation = new CancellationTokenSource();
 
         #region New attempt
-        private readonly T _g_service; // Joystick.WebSocket 
+        private readonly T _service; // Joystick.WebSocket 
         private CancellationTokenSource _cts;
         /// <summary>I just really want to play BG3 ...................................................................................................</summary>
 
         public WebsocketClient(T Service, string endpoint, string auth, CancellationTokenSource cts) { // fukin block. I .... nothingness
             // okay, what now dumbass, we have methods, but what next
-            _g_service = Service;
+            _service = Service;
             _wss_endpoint = new Uri(endpoint); // THIS RIGHT HERE attach no fuck, maybe, no fuck, logging FUCK FUCKF fuck ffuck fuckity fuck
             _cts = cts;
 
@@ -109,12 +108,15 @@ namespace ShimamuraBot
         }
 
         private async Task WebSocket_ReaderV3() { // IDFC the naming is coming back -> 2 -> 1.3 -> 3 See now it works
-            if(Volatile.Read(ref _connecting) != 1) { return; } //////////////ehhhhhhhhhhhhhhhhhhhhhh ?!
+            if (Volatile.Read(ref _connecting) != 1) { return; }
             string name = $"{this.name}:ReaderV1.3";
             Print(name, $"Starting the WebSocket Reader. (Thread: {Environment.CurrentManagedThreadId})", PrintSeverity.Debug);
 
             try {
-                await socket.ConnectAsync(_wss_endpoint, _cts.Token); // fuck your null reference you don't even get a 
+                if (socket == null)
+                    throw new BotException(name, "Socket was a null reference.");
+
+                await socket.ConnectAsync(_wss_endpoint, _cts.Token);
                 _connected = true;
                 _faulted = true;
 
@@ -129,14 +131,14 @@ namespace ShimamuraBot
 
 
                     if (socketReceive.MessageType == WebSocketMessageType.Text) {
-                        _ = _g_service.Receive(Encoding.UTF8.GetString(buffer, 0, socketReceive.Count)); // blah blah concurrentqueue or some shit
+                        _ = _service.Receive(Encoding.UTF8.GetString(buffer, 0, socketReceive.Count)); // blah blah concurrentqueue or some shit
                         //continue;
                     } else if (socketReceive.MessageType == WebSocketMessageType.Close) {
                         switch ((int?)socketReceive.CloseStatus) {
-                            case 1000: Print(name, $"Socket to {_g_service.Internal_Host} closed. (Normal Closure)", PrintSeverity.Normal); _faulted = false; return;
+                            case 1000: Print(name, $"Socket to {_service.Internal_Host} closed. (Normal Closure)", PrintSeverity.Normal); _faulted = false; return;
                             case 1002 or 1007 or 1008: _faulted = false; break;
                         }
-                        Print(name, $"The socket to {_g_service.Internal_Host} was terminated. (State: {(int?)socketReceive.CloseStatus ?? 1006})", PrintSeverity.Warn);
+                        Print(name, $"The socket to {_service.Internal_Host} was terminated. (State: {(int?)socketReceive.CloseStatus ?? 1006})", PrintSeverity.Warn);
                         break;
                     }
 
@@ -158,7 +160,7 @@ namespace ShimamuraBot
                 }
             }
 
-            _ = _g_service.Disconnect(true);
+            //_ = _service.Disconnect(true);
         }
 
 
@@ -181,7 +183,7 @@ namespace ShimamuraBot
         /// <param name="Modules">Experimental - Setup Modules for use by the WebSocket Reader</param>
         public WebsocketClient(string _channel_id, Service service, string Modules = "vnyan,") {
             channelId = _channel_id;
-            _service = service;
+            //_service = service;
             name = $"WebSocket:{service}";
 
             if(service == Service.Joystick)
@@ -257,7 +259,7 @@ namespace ShimamuraBot
             }
 
             socket = new ClientWebSocket();
-            if (_service == Service.Joystick) socket.Options.AddSubProtocol("actioncable-v1-json");
+            if (_service.Service == Service.Joystick) socket.Options.AddSubProtocol("actioncable-v1-json");
 
             _ = WebsocketReaderV1_3();
 
@@ -394,188 +396,7 @@ namespace ShimamuraBot
         }
 
 
-        private Task onMessage_StreamEvent(string payload) { // I have no idea what I was smoking when I wrote this.
-            try {
-                RootStreamEvents? streamEvent = JsonSerializer.Deserialize<RootStreamEvents>(payload);
-
-                switch (streamEvent?.message.type ?? "noop") {
-                    case "Started":
-                        // stream started
-                        Print("NT", "Your stream is now live.", PrintSeverity.Normal);
-                        _ = Logger.LogAsync(name, new string[] { "Stream registered as live." });
-                        return Task.CompletedTask;
-                    case "StreamEnding": // Stream ending (pending state? maybe for reconnection attempt?)
-                        /// noop - for now.
-                        return Task.CompletedTask;
-                    case "Ended": // Stream has ended
-                        Print("NT", $"your stream has ended.", PrintSeverity.Normal);
-                        _ = Logger.LogAsync(name, new string[] { "Stream registered as ended." });
-                        return Task.CompletedTask;
-                    case "ViewerCountUpdated": // Polled maybe? otherwise on actual change. it looks like it can actually generate 2 different ID's and fire them both
-                        Console.Title = $"♥ Shimamura :: {streamEvent.message.Metadata.viewerCount.ToString()} ♥";
-                        return Task.CompletedTask;
-                    case "SettingsUpdated":
-                        /// noop - for now, I might link this to the API call.
-                        return Task.CompletedTask;
-                    case "Tipped":
-                        /// ===> This goes to Module eventually, for now create a class maybe or something to handle WebSocket connect to vNyan
-                        /// This is also going to be the most tricky one to handle because you need to handle all client modules
-                        /// assuming it is a 'Module' type tip.
-                        var redeem = streamEvent?.message.text;
-                        var redeemed = streamEvent?.message.Metadata.tipMenuItem;
-                        var redeemer = streamEvent?.message.Metadata.who;
-                        var cost = streamEvent?.message.Metadata.howMuch;
-                        /*  I don't know if any of these fields can be nullable, if so then it could throw when it shouldn't.  */
-                        /// I think they split(' ', 2) tip items before sending over socket, reasoning:
-                        /// "Remove Bra for the Entire Stream" is a tip item, however I received "Remove Bra"
-                        /// This was long ago though I don't think I log tips anymore / haven't got a tip in a long time.
-                        /// For now to make it easy, I'm only going to go by the tip_cost
-                        /// Investimagate.
-                        /// 2025 - Yeah this is interest, the tip menu is still around and "Name the item" is "Remove Bra for the Entire Stream" idk.
-                        /// streamEvent.message.text was the code at the time that logged which is what is displayed to chat? "{{Remove Bra}}"
-                        /// hmm, yes no idea. I'll have to do a test on 1 tip and figure it out.
-
-
-                        /// This seems like flawed logic but it's not because it's a server sent Tipped event.
-                        /// This means that even because the fields are nullable, it will still only fire if a TIP event is sent.
-                        switch (cost) {
-                            case 3:
-                                _ = Redeemer("", "cumdump", true, 10, true);
-                                break;
-                            case 10:
-                                _ = Redeemer("", "tits", true, 600, true); // no models has clothes right now until I fix Yuri so do not enable this redeem.
-                                break;
-                            case 15:
-                                _ = Redeemer("", "eyes", true, 0);
-                                break;
-                            case 25:
-                                _ = Redeemer("", "tits", true, 1800, true);
-                                break;
-                            case 100:
-                                _ = Redeemer("", "tits", true);
-                                break;
-                            default:
-                                if (cost > 30)
-                                    _ = SendMessage("send_message", $"Thank you for the tip ! If you have any requests let me know ^^ - A.S.");
-                                else
-                                    _ = SendMessage("send_message", $"{Heart_Purple} Thank you for the tip {streamEvent?.message.Metadata.who} ! {Heart_Purple}");
-                                break;
-                        }
-                        return Task.CompletedTask;
-                    case "WheelSpinClaimed":
-                        // Wheelspin tip - I do not believe you have implemnted any way of handling this yet, soo. DRAW THE FUCKING OWL
-                        Print("", $"{streamEvent?.message.Metadata.who ?? "Unknown"} just spun the wheel and won {streamEvent.message.Metadata.prize} for {streamEvent.message.Metadata.howMuch} !", PrintSeverity.Normal);
-                        // owl
-                        break;
-                    case "Followed": // You haz new fren
-                        _ = SendMessage("send_message", $"Welcome to the {Cherry_Blossom} Cherry Blossoms {Cherry_Blossom} {streamEvent?.message.Metadata.who}. Thank you the Follow !");
-                        Print("", $"A new follower has appeared! Say hi to {streamEvent?.message.Metadata.who}!", PrintSeverity.Normal);
-                        return Task.CompletedTask;
-                    case "FollowerCountUpdated":
-                        // Noop - 
-                        return Task.CompletedTask;
-                    case "DeviceConnected": // You haz device connected and reported back by API
-                        Print("", $"Your toy was registered as `{streamEvent?.message.text}` from Joystick", PrintSeverity.Normal);
-                        // IDK probably not worth mentioning but I don't have a toy to test how connection works. If someone was actually running Shimararu it might be useful to know on the fly when it was registered.
-                        return Task.CompletedTask;
-                    default:
-                        Print($"{this.name}:StreamEvent", $"Received a new Event that is not handled! EXCITING!", PrintSeverity.Debug);
-                        _ = Logger.LogAsync($"{this.name}:WebSocket:StreamEvent:Discover L I M P", new string[] { $"Unhandled StreamEvent Raw :: ", payload });
-                        break;
-                }
-            } catch (Exception ex) { new BotException($"{this.name}:StreamEvent", $"Could not deserialize the WebSocket message.", ex); return Task.CompletedTask; }
-                // Discover L I M P
-
-            return Task.CompletedTask;
-        }
-
-
-        /// <summary>
-        ///  Handles bang bot commands.
-        /// </summary>
-        /// <param name="message"><see cref="RootMessageEvent"/> deserialized message.</param>
-        private Task OnBangCommand(RootMessageEvent msg) {
-            using (VNyan vnyan = new()) {
-                var cmd = msg.message.text.Split('.')[1].ToLower();
-
-                switch (cmd) {
-                    case "duck" or "yeet":
-                        vnyan.Redeem(cmd);
-                        break;
-                    case "testing":
-                        vnyan.Redeem("tta");
-                        break;
-                }
-            }
-
-            return Task.CompletedTask;
-        }
-
-
-        private Task onMessage_Message(string payload) {
-            RootMessageEvent? msg;
-
-            try { msg = JsonSerializer.Deserialize<RootMessageEvent>(payload); } catch (Exception ex) { new BotException(name, $"Unable to deserialize OnMessage: {payload}", ex); return Task.CompletedTask; }
-            ArgumentNullException.ThrowIfNullOrEmpty(msg.message.text, payload);
-            ///chatHistory2.Add(msg.message.messageId);
-            //if (chatHistory2[user_input])
-
-            if (msg.message.text.ToLower().Contains("adachi91")) { if (_cooldown.IsRunning && _cooldown.ElapsedMilliseconds > 13_130) { _cooldown.Restart(); } else { _cooldown.Start(); if (WebUI!.Open && _cooldown.ElapsedMilliseconds < 13_000) _ = AudioOot.PlayAudioAsync(adsfasdfasdfasFUCKYOUdfsdafasdfasdfasdfsadfsadfs.HeyDumb, WebUI); } }
-            if (msg.message.text.Contains("002") || msg!.message.text.Contains("zerotwo")) if (WebUI!.Open) WebUI.SendSSEImageAsync("https://steamuserimages-a.akamaihd.net/ugc/778494769436587920/675371BED432AF394DB2F145632671082F4779DF/?imw=5000\u0026imh=5000\u0026ima=fit\u0026impolicy=Letterbox\u0026imcolor=%23000000\u0026letterbox=false", 4); else new BotException(name, $"WebUI is not open.");
-            if (msg.message.visibility != "public") { _ = Logger.LogAsync($"{this.name}:OnMessage", new string[] { $"Discover L I M P - NonPub msg: {payload}" }); return Task.CompletedTask; }// I think DM to bot only - not user. so this should be handled for bot-whisper interactions.
-            if (msg.message.text.StartsWith('.')) { _ = OnBangCommand(msg); return Task.CompletedTask; }
-
-            Print("Chat", $"{msg.message.author.username}: {msg.message.text}", PrintSeverity.Normal);
-
-            
-            _ = AudioOot.PlayAudioAsync(adsfasdfasdfasFUCKYOUdfsdafasdfasdfasdfsadfsadfs.Beep);
-            _ = Logger.LogAsync("ChatMessage", new string[] { $"{msg.message.author.username}: {msg.message.text}" });
-
-            return Task.CompletedTask;
-        }
-
-
-        private Task onMessage_PresenceEvent(string payload) {
-            RootPresenceEvent? msg;
-
-            try { msg = JsonSerializer.Deserialize<RootPresenceEvent>(payload); } catch (Exception ex) { new BotException($"{this.name}:OnPresence", $"Could not deserialize remote message: {payload}", ex); return Task.CompletedTask; }
-
-            var eveType = msg!.message.type == "enter_stream" ? "Entered the chat" : "Left the chat";
-            _ = Logger.LogAsync("UserPresence", new string[] { $"{msg.message.text} {eveType}" });
-            return Task.CompletedTask;
-        }
-
-
-        private Task onMessage(string data) {
-            if (String.Compare(data, 0, "{\"type\":\"ping\"", 0, 14, StringComparison.OrdinalIgnoreCase) == 0) return Task.CompletedTask; // why? BECAUSE I STILL FIND IT HILARIOUS
-
-            if (data.Contains("confirm_subscription")) { // TODO better comparison other than "Contains"
-                Print(this.name, $"Estasblished connection to chatroom.", PrintSeverity.Normal);
-                return Task.CompletedTask;
-            } else if (data.Contains("reject_subscription")) {
-                //to log failures bypassing the buffer.
-                if(DEBUGGING_ENABLED /* DO NOT REMOVE THIS ONE. */ ) _ = Logger.LogAsync(this.name, new string[] { data });
-                Print(this.name, $"Could not connect to chat. Make sure everything is correctly configured.", PrintSeverity.Warn);
-                return Task.CompletedTask;
-            }
-
-            if (!data.Contains("\"message\":")) return Task.CompletedTask;
-
-            JsonNode jsonNode = JsonNode.Parse(data)!;
-
-            string eventType = (string)jsonNode["message"]!["event"]!;
-
-            switch (eventType) {
-                case "StreamEvent": _ = onMessage_StreamEvent(data); break;
-                case "ChatMessage": _ = onMessage_Message(data); break;
-                case "UserPresence": _ = onMessage_PresenceEvent(data); break;
-                default:
-                    Print($"{this.name}:EventType", $"Unexpected request from remote host has been logged.", PrintSeverity.Debug);
-                    _ = Logger.LogAsync($"{this.name}-EventType", new string[] { $"Unexpected Type from {WSS_HOST}", $"Event={eventType}", $"JSON={data}" });
-                    break;
-            }
-            return Task.CompletedTask;
-        }
+        
 
 
         

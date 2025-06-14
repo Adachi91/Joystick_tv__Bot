@@ -106,8 +106,7 @@ namespace ShimamuraBot.Modules
         ///  Get the current application settings.
         /// </summary>
         /// <returns>ApplcationSettings class - Note: Can be null if an error was raised</returns>
-        public static async Task<ApplicationSettings> GetSettings() =>
-            await SettingsHandler(false);
+        public static async Task<ApplicationSettings> GetSettings() => await SettingsHandler(false);
 
 
         /// <summary>
@@ -118,8 +117,7 @@ namespace ShimamuraBot.Modules
         /// <param name="name">redeem/internal name</param>
         /// <param name="cost">redeem cost/internal wujt</param>
         /// <returns>zeroZEROTWO</returns>
-        public static async Task WriteSettings(string module, string type, string name, string cost) =>
-            await SettingsHandler(true, new string[] { module, type, name, cost });
+        public static async Task WriteSettings(string module, string type, string name, string cost) => await SettingsHandler(true, new string[] { module, type, name, cost });
 
         // M8 wat kind of bullshit did you do - TODO: Fix this, it's a mess do not send a string[] of parameters send them all or none   or an object that you can't Key check fml
         private static async Task<ApplicationSettings> SettingsHandler(bool writing, params string[] dparams) { // string module, string type, string name, int? cost) {

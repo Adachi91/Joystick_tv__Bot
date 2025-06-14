@@ -7,7 +7,8 @@ using System.Diagnostics.CodeAnalysis;
 
 namespace ShimamuraBot
 {
-    internal class BotException : Exception {
+    internal class BotException : Exception { // log only inner log only what send go print stop log
+        //public HashSet<>
         /// <summary>
         ///  Send error message to the buffer
         /// </summary>
@@ -24,7 +25,14 @@ namespace ShimamuraBot
         /// <param name="msg">Message</param>
         /// <param name="inner"><see cref="Exception"/> exception</param>
         public BotException(string sender, string msg, Exception inner) : base(msg, inner) {
-            if (inner.GetType().Name == "BotException") return;
+            if (inner is BotException) return;
+
+            // Logic ->
+            // Component nounce
+            // Log once
+            // stfu Print
+            // ...additional arg?
+
 
             Print(sender, $"{msg}. InnerException: {inner}", PrintSeverity.Error);
         }

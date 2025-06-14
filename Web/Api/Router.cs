@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Net;
 using System.Text;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 
 namespace ShimamuraBot.Web.Api {
@@ -12,47 +13,48 @@ namespace ShimamuraBot.Web.Api {
         private string name = "Router";
 
         #region RouterV2
+        #region api_routing
+        private Regex api_path = new Regex(@"\s(.*\/)\s");
 
-        public enum ApiRoutes {
-            Help,
-            Ping,
-            Noop,
-            etc,
-            Pong
-        }
+        public async Task<HttpStatusCode?> RouteAsync(string request, StreamReader reader, StreamWriter writer) {
+            Match api_path_match = api_path.Match(request);
+            string matchedPath = api_path_match.Groups[1].Value;
+            
+            switch(matchedPath) {
+                case "/api/ping/":
+                    await SendPongAsync(writer); // should send pong back to client that accessed api endpoint via SSE. ping, and trigger a waiting response for pong.
+                    break;
+                case "/api/stats/":
+                    break;
+                default:
+                    new BotException(name, $"Invalid path was given."); // I want to log the path here, but I need to make sure this doesn't go sideways fast.
+                    break;
+            }
 
-        public async Task<ApiRoutes?> RouteAsync(string request, StreamReader reader, StreamWriter writer) {
-            if(request.StartsWith("GET /api/ping")) {
+            if (request.StartsWith("GET /api/ping")) {
                 await SendPongAsync(writer);
-                return ApiRoutes.Pong;
+                return HttpStatusCode.OK;
             }
 
             return null;
         }
+        #endregion
 
-        public async Task<WebInterface.Route?> RouteAsync(WebInterface.Route route, StreamReader reader, StreamWriter writer) {
+
+        #region SSE_Handling
+        public async Task<Route> RouteAsync(Route route, StreamReader reader, StreamWriter writer) {
             switch(route) {
-                case WebInterface.Route.OBS:
+                case Route.OBS:
                     await SendResponse_SSEAsync(writer);
-                    return WebInterface.Route.OBS;
-                case WebInterface.Route.SSE:
+                    return Route.OBS;
+                case Route.SSE:
                     await SendResponse_SSEAsync(writer);
-                    return WebInterface.Route.SSE;
-                case WebInterface.Route.API:
-                    new BotException(name, "Wrong overload? You can not use this overload for API routing.");
-                    return null;
+                    return Route.SSE;
+                case Route.API:
+                    throw new BotException(name, "Wrong overload? You can not use this overload for API routing.");
                 default:
-                    new BotException(name, $"Invalid route type. ({route})");
-                    return null;
+                    throw new BotException(name, $"Invalid route type. ({route})");
             }
-
-            /*if (request.StartsWith("GET /api/ping")) {
-                await SendPongAsync(writer);
-            } else if (request.StartsWith("GET /SSE/OBS")) {
-                await SendResponse_SSEAsync(writer);
-            } else if(request.StartsWith("GET /SSE")) {
-                await SendResponse_SSEAsync(writer);
-            }*/
         }
 
 
@@ -61,65 +63,30 @@ namespace ShimamuraBot.Web.Api {
             await writer.WriteAsync("HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nAccess-Control-Allow-Origin: *\r\nAccess-Control-Allow-Methods: GET, POST, OPTIONS\r\nAccess-Control-Allow-Headers: Content-Type\r\nCache-Control: no-cache\r\nConnection: keep-alive\r\n\r\n");
         }
 
-        public async Task SendResponse_NotFoundAsync(StreamWriter writer) => await writer.WriteLineAsync("HTTP/1.1 404 Not Found\r\nContent-Type: text/plain\r\n\r\nNot Found");
+        public async Task SendResponse_NotFoundAsync(StreamWriter writer) => await writer.WriteLineAsync($"{HttpHeaderPlainNotFound}404 - Not Found");
 
-        /// <summary>
-        ///  for debug only !
-        /// </summary>
+        /// <summary>for debug only !</summary>
         /// <remarks>This is to monitor ping/pong to make sure it's functioning correctly.</remarks>
         /// <param name="writer"></param>
-        /// <returns></returns>
-        public async Task SendPongAsync(StreamWriter writer) => await writer.WriteLineAsync($"HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n\r\n{new { @event = "pong", time = DateTime.Now }.Stringify()}");
+        public async Task SendPongAsync(StreamWriter writer) => await writer.WriteLineAsync($"{HttpHeaderJsonOk}{new { @event = "pong", time = DateTime.Now }.Stringify()}");
+
+        private string HttpHeaderJsonOk => "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n\r\n";
+        private string HttpHeaderJsonNotFound => "HTTP/1.1 404 OK\r\nContent-Type: application/json\r\n\r\n";
+        private string HttpHeaderPlainOk => "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\n\r\n";
+        private string HttpHeaderPlainNotFound => "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\n\r\n";
+        #endregion
         #endregion
 
 
-        /// <summary>
-        ///  Routing for API
-        /// </summary>
-        /// <param name="context"><see cref="WebInterface._http_socket"/> HTTPListener</param>
-        public void Route(HttpListenerContext context) {
-            HttpListenerRequest? request = context.Request;
-
-            if(request == null) return;
-            if(string.IsNullOrEmpty(request.Url?.AbsolutePath)) return;
-
-            var location = request.Url.AbsolutePath;
-
-            switch(location) {
-                case "/ping": // this is for API route
-                    SendPong(context);
-                    break;
-                default:
-                    dynamic resp = new {
-                        Message = "Not Found",
-                        Time = DateTime.UtcNow
-                    }.Stringify();
-                    SendSSEAsync(context, resp);
-                    break;
-            }
-        }
-
-
         #region Server-Sent Events
+        [Obsolete("Shits ded, yo.")]
         public enum SSEndPoint {
             OBS,
             SSE
         }
 
-        /*public Task<bool> _dumbstructor(HttpListenerContext ctx, SSEndPoint endpoint_context) { /// Not so stateless afterall, eh?
-            try {
-                switch(endpoint_context) {
-                    case SSEndPoint.OBS: if (obs_streamreader == null) obs_streamreader = new(ctx.Response.OutputStream); break;
-                    case SSEndPoint.SSE: if (apissestreamreader == null) apissestreamreader = new(ctx.Response.OutputStream); break;
-                }
-            } catch (Exception ex) {
-                new BotException($"{name}:_dumbstructor", $"Could not set context for {endpoint_context}.", ex);
-                return false;
-            }
 
-            return true;
-        }*/
-
+        [Obsolete("shits ded yo")]
         private async Task<bool> WriteStreamAsync(HttpListenerContext ctx, string json) {
             bool successfulfailure = false;
 
@@ -138,27 +105,23 @@ namespace ShimamuraBot.Web.Api {
             return successfulfailure;
         }
 
+        [Obsolete("shits ded yo")]
         /// <summary>
         ///  Attempts to send a message to StreamWriter context.
         /// </summary>
-        /// <remarks>This only sends the writers context so this method has no idea of the client, weither it be SSE or an API route.</remarks>
+        /// <remarks>This only sends the writers context so this method has no idea of the client, weither it be SSE or an API route.<br />Will throw <see cref="ObjectDisposedException"/> If the "<see cref="StreamWriter"/>" is disposed due to TcpListener.Close()</remarks>
         /// <param name="writer">The clients StreamWriter.</param>
         /// <param name="json">The message to send in <b>JSON</b> format.</param>
-        /// <returns><see cref="bool"/> True:Failed, False:Success</returns>
-        public async Task<bool> SendSSEAsync(StreamWriter writer, string json) { // going to panic at the last level so the caller can maybe try to handle it.
-            try {
-                await writer.WriteLineAsync("event: message");
-                await writer.WriteLineAsync($"data: {json}");
-                await writer.WriteLineAsync();
-                await writer.FlushAsync();
-                return false;
-            } catch (Exception ex) {
-                new BotException(name, "Error sending SSE Message.", ex);
-            }
-
-            return true;
+        /// <exception cref="ObjectDisposedException"></exception>
+        public async Task SendSSEAsync(StreamWriter writer, string json) {
+            await writer.WriteLineAsync("event: message");
+            await writer.WriteLineAsync($"data: {json}");
+            await writer.WriteLineAsync();
+            await writer.FlushAsync();
         }
 
+
+        [Obsolete("shits ded yo")]
         public async Task<bool> SendSSEAsync(HttpListenerContext context, string json, SSEndPoint endpoint = SSEndPoint.OBS) {
             // Headers should already be set and keep-alive, etc. since I'm passing around the SSE Context.
             try {
@@ -173,15 +136,11 @@ namespace ShimamuraBot.Web.Api {
                 return false;
             }
         }
-        //dumbass hack- figure out what to do, either inhereit webinterface or stfu.
-        //public void Shutdown() {
-          //  obs_streamreader = null;
-            //apissestreamreader = null;
-        //}
         #endregion
 
 
         #region API Routes
+        [Obsolete("shits ded yo")]
         private async Task<bool> SendAPIMessageAsync(HttpListenerContext context, object payload) {
             HttpListenerResponse response = context.Response;
             response.ContentType = "application/json";
@@ -198,6 +157,7 @@ namespace ShimamuraBot.Web.Api {
             return true;
         }
 
+        [Obsolete("shits ded yo")]
         public void SendPong(HttpListenerContext ctx) {
             HttpListenerRequest request = ctx.Request;
             HttpListenerResponse response = ctx.Response;
@@ -229,6 +189,13 @@ namespace ShimamuraBot.Web.Api {
  * Routes
  * \/sse/obs_events - Server-Sent Events for OBS Studio (This endpoint will initiate a connection to the OBS SSE) - done
  * \/sse - Server-Sent Event Command Channel for the API to push messages to the client. - done
+ *      {type: "new_message"} - on New Message.
+ *      {type: "presence"} - on Presence change.
+ *      {type: "tip"} - Tip was sent.
+ *      {type: "ping+pong"} - ping; request pong via Api
+ *      {type: "offline"} - Send when stopping.
+ *      {type: "online"} - Send when going live.
+ *      {type: "update"} - Get all settings refreshed.
  * 
  *  - Generics for \/api endpoint. -
  * \/api/ping - Ping/Pong endpoint for testing the API.
@@ -239,6 +206,9 @@ namespace ShimamuraBot.Web.Api {
  * \/api/joystick/ban - Setter
  * \/api/joystick/mute - Setter
  * \/api/joystick/banwords - Setter Getter
+ * \/api/joystick/messages - Getter
+ * \/api/joystick/presence - Getter
+ * \/api/joystick/tipped - Getter ?? This might be best sent over SSE.
  * 
  * 
  * 

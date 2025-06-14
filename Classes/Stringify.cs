@@ -16,10 +16,10 @@ namespace ShimamuraBot.Classes
         }
 
         /// <summary>
-        ///  Returns obj and stuff. My god I can't explain shit right now. I'm tired, leave me alone.
+        ///  Returns a JSON wrapped Object from source.
         /// </summary>
-        /// <param name="json">Whatever to parse, bitch you better make sure it's JSON otherwise idk</param>
-        /// <returns><see cref="object"/> || Null Nil Undefined Err Pizza oven</returns>
+        /// <param name="json">Source to <see cref="JsonDocument.Parse(string, JsonDocumentOptions)"/></param>
+        /// <returns><see cref="object"/> || <see cref="Nullable"/></returns>
         public static object? Parse(this string json) {
             try {
                 using JsonDocument generic = JsonDocument.Parse(json);
